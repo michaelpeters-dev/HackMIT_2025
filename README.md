@@ -1,6 +1,9 @@
 # CodeMind
 
 [<img width="250" height="250" alt="image" src="https://github.com/user-attachments/assets/7412d3fe-b739-4c09-bfc0-d3fc5f58c642" />
+
+<img width="258" height="248" alt="Screenshot_2025-09-14_at_3 35 44_AM" src="https://github.com/user-attachments/assets/d7a6af25-8d09-4ab0-b7a0-c213f45f6c22" />
+
 ](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) 
 
 ## Table of Contents
