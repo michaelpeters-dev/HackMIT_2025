@@ -13,12 +13,6 @@
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Running the Development Server](#running-the-development-server)
-  - [Building for Production](#building-for-production)
-  - [Deployment](#deployment)
-- [Sample Demo Code (Example Lesson)](#sample-demo-code-example-lesson)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
 
 ---
 
