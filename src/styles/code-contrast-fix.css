@@ -1,0 +1,58 @@
+/* Force high contrast for code elements to meet accessibility standards */
+.message-content code,
+button code,
+div code,
+span code,
+p code {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  border: 2px solid #d1d5db !important;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  display: inline-block !important;
+}
+
+.message-content pre,
+button pre,
+div pre,
+span pre,
+p pre {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  padding: 16px !important;
+  border-radius: 8px !important;
+  border: 2px solid #d1d5db !important;
+  overflow-x: auto !important;
+  margin: 12px 0 !important;
+}
+
+.message-content pre code,
+button pre code,
+div pre code,
+span pre code,
+p pre code {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #000000 !important;
+  display: block !important;
+}
+
+/* Additional high specificity selectors */
+* code {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+* pre {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+* pre code {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
