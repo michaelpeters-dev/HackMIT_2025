@@ -19,7 +19,7 @@ interface SyntaxError {
 }
 
 export default function CodeEditor() {
-  const [code, setCode] = useState(`# Write your solution here`)
+  const [code, setCode] = useState(``)
   const [output, setOutput] = useState("")
   const [isExecuting, setIsExecuting] = useState(false)
   const [hasRun, setHasRun] = useState(false)

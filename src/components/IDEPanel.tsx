@@ -21,7 +21,7 @@ export default function IDEPanel() {
               className={`px-3 py-1 text-white text-sm font-medium rounded-lg ${
                 currentLesson.difficulty === "Beginner"
                   ? "bg-green-600"
-                  : currentLesson.difficulty === "Intermediate"
+                  : currentLesson.difficulty === "Medium"
                     ? "bg-yellow-600"
                     : "bg-red-600"
               }`}
