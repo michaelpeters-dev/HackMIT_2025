@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import type React from "react"
+// (removed unused setActiveTab import)
 
 import { Pin, MessageCircle, BookOpen } from "lucide-react"
 import { useLessonContext } from "./PracticeView"
@@ -8,6 +9,12 @@ import SummaryModal from "./SummaryModal"
 import { useSubmission } from "../hooks/useApi"
 import type { Lesson, KeystrokeData } from "../types/api"
 import "../styles/code-contrast-fix.css"
+
+// === Frequency controls (tune these) ===
+const FEEDBACK_POLL_MS = 8000          // check every 8s (was 25s)
+const ANALYSIS_WINDOW_MS = 30000       // look at last 30s (was 45s)
+const MIN_KEYS_FOR_ANALYSIS = 10       // need 10 recent keys (was 20)
+const FEEDBACK_COOLDOWN_MS = 10000     // at least 10s between tips (was 20s)
 
 interface Message {
   id: number
@@ -81,9 +88,12 @@ export default function TeacherSidebar({
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
-  const [lastFeedbackType, setLastFeedbackType] = useState<number>(-1) // kept for future use
-  const [feedbackCount, setFeedbackCount] = useState(0) // kept for future use
+  const [lastFeedbackType, setLastFeedbackType] = useState<number>(-1)
+  const [feedbackCount, setFeedbackCount] = useState(0)
   const [lastFeedbackTime, setLastFeedbackTime] = useState<number>(0)
+
+  // guard to avoid overlapping API calls
+  const analysisInFlightRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -104,76 +114,95 @@ export default function TeacherSidebar({
     setMessages((prev) => [...prev, newMessage])
   }
 
-  // ---- Keystroke → API (Claude) analysis with local fallback ----
-  const analyzeKeystrokes = async (recentKeystrokes: KeystrokeData[]) => {
+  // ——— More frequent keystroke-driven tips ———
+  useEffect(() => {
+    if (!keystrokes || keystrokes.length === 0) return
+
+    const interval = setInterval(() => {
+      if (document.hidden) return // don't run when tab is hidden
+
+      const now = Date.now()
+      const recentKeystrokes = keystrokes.filter((k) => now - k.timestamp <= ANALYSIS_WINDOW_MS)
+
+      const enoughKeys = recentKeystrokes.length >= MIN_KEYS_FOR_ANALYSIS
+      const cooledDown = now - (lastFeedbackTime || 0) >= FEEDBACK_COOLDOWN_MS
+      const busy = analysisInFlightRef.current
+
+      if (!enoughKeys || !cooledDown || busy) return
+
+      analysisInFlightRef.current = true
+      analyzeKeystrokesLocally(recentKeystrokes)
+        .then((analysis) => {
+          if (analysis) {
+            addMessage(analysis)
+            setLastFeedbackTime(now)
+            if (activeTab !== "teacher") onTabChange("teacher")
+          }
+        })
+        .catch((error) => {
+          console.error("Error during keystroke analysis:", error)
+        })
+        .finally(() => {
+          analysisInFlightRef.current = false
+        })
+    }, FEEDBACK_POLL_MS)
+
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keystrokes, activeTab, lastFeedbackTime])
+
+  const analyzeKeystrokesLocally = async (recentKeystrokes: KeystrokeData[]) => {
     try {
+      console.log("[v0] Analyzing keystrokes with Claude API...")
+      console.log("[v0] Keystroke data being sent:", {
+        keystrokeCount: recentKeystrokes.length,
+        timeSpan:
+          recentKeystrokes.length > 1
+            ? recentKeystrokes[recentKeystrokes.length - 1].timestamp - recentKeystrokes[0].timestamp
+            : 0,
+        lesson: currentLesson?.title,
+      })
+
       const response = await fetch("/api/teacher/keystroke-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        cache: "no-store",
         body: JSON.stringify({
           keystrokes: recentKeystrokes,
           context: {
             lessonTitle: currentLesson?.title || "Programming Practice",
             lessonDescription: currentLesson?.description || "Interactive programming assistance",
-            analysisWindow: "45 seconds",
+            analysisWindow: `${Math.round(ANALYSIS_WINDOW_MS / 1000)} seconds`,
             totalKeystrokes: recentKeystrokes.length,
           },
           aiConfig: {
             model: "claude-3-5-haiku-20241022",
-            maxTokens: 400,
+            maxTokens: 120,
             temperature: 0.3,
           },
         }),
       })
 
-      const data = await response.json()
-      if (data?.analysis && String(data.analysis).trim().length > 0) {
-        return String(data.analysis)
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response ok:", response.ok)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Claude API success:", data)
+        return data.analysis
+      } else {
+        const errorData = await response.json()
+        console.log("[v0] Claude API error response:", errorData)
+        throw new Error(`API failed with status ${response.status}`)
       }
-      return generateAdvancedLocalAnalysis(recentKeystrokes)
-    } catch {
+    } catch (error) {
+      console.log("[v0] Claude API failed, using local analysis fallback")
       return generateAdvancedLocalAnalysis(recentKeystrokes)
     }
   }
 
-  useEffect(() => {
-    if (!keystrokes || keystrokes.length === 0) return
-
-    const feedbackInterval = setInterval(() => {
-      const now = Date.now()
-      const recentKeystrokes = keystrokes.filter((k) => now - k.timestamp <= 45000) // Last 45 seconds
-
-      if (recentKeystrokes.length > 20) {
-        // Prevent analysis if we just gave feedback recently
-        const timeSinceLastFeedback = now - (lastFeedbackTime || 0)
-        if (timeSinceLastFeedback < 20000) {
-          // At least 20 seconds between feedback
-          return
-        }
-
-        analyzeKeystrokes(recentKeystrokes)
-          .then((analysis) => {
-            if (analysis) {
-              addMessage(analysis)
-              setLastFeedbackTime(now) // Track when we last gave feedback
-              // Auto-switch to teacher tab
-              if (activeTab !== "teacher") {
-                onTabChange("teacher")
-              }
-            }
-          })
-          .catch((error) => {
-            console.error("Error during keystroke analysis:", error)
-          })
-      }
-    }, 25000) // Every 25 seconds
-
-    return () => clearInterval(feedbackInterval)
-  }, [keystrokes, activeTab, lastFeedbackTime, onTabChange])
-
-  // Local fallback analysis when Claude/API is not available
   const generateAdvancedLocalAnalysis = (keystrokes: KeystrokeData[]): string => {
+    console.log("[v0] Using advanced local keystroke analysis...")
+
     const typingKeys = keystrokes.filter((k) => k.key.length === 1)
     const backspaces = keystrokes.filter((k) => k.key === "Backspace")
     const specialKeys = keystrokes.filter((k) =>
@@ -182,7 +211,7 @@ export default function TeacherSidebar({
 
     const timings = keystrokes
       .map((k, i) => (i > 0 ? k.timestamp - keystrokes[i - 1].timestamp : 0))
-      .filter((t) => t > 0 && t < 10000) // Filter out extremely long pauses
+      .filter((t) => t > 0 && t < 10000)
 
     const avgTimeBetweenKeys = timings.length > 0 ? timings.reduce((a, b) => a + b, 0) / timings.length : 0
     const longPauses = timings.filter((t) => t > 3000).length
@@ -208,44 +237,51 @@ export default function TeacherSidebar({
     const hasConsistentRhythm = timings.length > 10 && Math.abs(Math.max(...timings) - Math.min(...timings)) < 800
     const showsHesitation = longPauses > keystrokes.length * 0.15
     const isTypingFast = avgTimeBetweenKeys < 180 && wpm > 30
+    const isTypingCarefully = errorRate < 0.08 && avgTimeBetweenKeys > 250
     const showsGoodFlow = rapidBursts > keystrokes.length * 0.2 && longPauses < keystrokes.length * 0.1
 
     const feedbackOptions = [
       () => {
         if (wpm > 40) {
-          return `**Performance Analysis:** Exceptional ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate! You're moving quickly while keeping mistakes under control. Your ${longPauses} longer thinking pauses show strategic planning. **Next step:** narrate your intent before each short burst to make your reasoning legible.`
+          return `**Performance Analysis:** Exceptional ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate! You're in the top 10% of developers for typing speed. Your ${longPauses} strategic pauses show excellent problem-solving discipline. **Interview Tip:** This speed advantage lets you focus more on algorithm optimization and edge cases.`
         } else if (wpm > 25) {
-          return `**Performance Analysis:** Solid ${wpm} WPM and steady progress. ${backspaces.length} corrections across ${typingKeys.length} chars (${Math.round(
-            correctionEfficiency,
-          )}:1) shows healthy self-monitoring. **Next step:** commit a tiny slice (one function or case) and test it aloud.`
+          return `**Performance Analysis:** Strong ${wpm} WPM coding pace. Your ${backspaces.length} corrections across ${typingKeys.length} characters show good self-monitoring (${Math.round(correctionEfficiency)}:1 efficiency). **Interview Tip:** This balanced approach of speed and accuracy is ideal for technical interviews.`
         } else {
-          return `**Performance Analysis:** Deliberate pace at ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate. Your ${longPauses} planning pauses suggest careful reasoning. **Next step:** code in 60–90s micro-iterations—implement one line, then validate it with a quick mental trace.`
+          return `**Performance Analysis:** Methodical ${wpm} WPM approach with ${Math.round(errorRate * 100)}% error rate. Your ${longPauses} thinking pauses demonstrate careful problem-solving. **Interview Tip:** Quality over speed! Use this deliberate pace to explain your reasoning clearly to interviewers.`
         }
       },
       () => {
         if (showsGoodFlow) {
-          return `**Flow:** Nice rhythm—${rapidBursts} quick bursts balanced by brief checks. That cadence usually reflects clarity. **Tip:** keep announcing the next micro-goal (“parse input”, “handle empty case”) before each burst.`
+          return `**Coding Flow Analysis:** Excellent rhythm detected! ${rapidBursts} quick coding bursts balanced with ${longPauses} strategic pauses. Your ${wpm} WPM maintains good momentum without sacrificing accuracy (${Math.round(errorRate * 100)}% error rate). **Interview Tip:** This natural flow shows confidence - perfect for live coding sessions.`
         } else if (hasConsistentRhythm) {
-          return `**Flow:** Consistent timing (~${avgTimeBetweenKeys.toFixed(0)}ms between keys) indicates focus. **Tip:** punctuate with tiny test runs or mental walkthroughs to lock gains and surface edge cases early.`
+          return `**Coding Flow Analysis:** Impressive consistency! Your ${avgTimeBetweenKeys.toFixed(0)}ms average keystroke timing shows steady focus. This disciplined pace at ${wpm} WPM demonstrates good concentration. **Interview Tip:** Consistent rhythm like this helps interviewers follow your thought process.`
         } else {
-          return `**Flow:** Pace varies—${longPauses} longer pauses mixed with sprints. That's fine during design. **Tip:** when you pause, verbalize the decision you’re weighing (e.g., data shape, loop boundary) to keep interviewers aligned.`
+          return `**Coding Flow Analysis:** Dynamic coding style with varied pacing. ${longPauses} longer pauses suggest deep thinking, while your overall ${wpm} WPM keeps good progress. **Interview Tip:** Verbalize during pace changes: "Let me think through this logic" or "Now I'll implement the solution."`
         }
       },
       () => {
         if (specialKeys.length > keystrokes.length * 0.12) {
-          return `**Editor proficiency:** Frequent special keys (${specialKeys.length}) suggest efficient navigation. **Tip:** keep leveraging quick cursor moves when refactoring small blocks—it's a subtle signal of fluency.`
+          return `**Technical Proficiency:** Excellent keyboard navigation! ${specialKeys.length} special keys (arrows, tabs) in ${keystrokes.length} total keystrokes shows strong editor proficiency. Combined with ${wpm} WPM, this efficiency is impressive. **Interview Tip:** This technical fluency demonstrates professional experience - a subtle but positive signal to interviewers.`
         } else if (errorRate < 0.05) {
-          return `**Accuracy:** Very low correction rate (~${Math.round(errorRate * 100)}%). **Tip:** don't be afraid to prototype imperfectly first—showing how you debug can be as impressive as pristine typing.`
+          return `**Technical Proficiency:** Outstanding accuracy! Only ${Math.round(errorRate * 100)}% error rate with ${wpm} WPM typing. Your precision suggests strong attention to detail and coding experience. **Interview Tip:** This accuracy is excellent, but don't hesitate to make strategic mistakes to show your debugging process.`
         } else {
-          return `**Editing:** Balanced speed with corrections (~${Math.round(errorRate * 100)}%); common keys: ${mostUsedKeys.join(
-            ", ",
-          )}. **Tip:** if you notice repeated typo patterns, slow for 10–15s to stabilize, then resume bursts.`
+          return `**Technical Proficiency:** Balanced coding approach with ${Math.round(errorRate * 100)}% error rate and ${backspaces.length} corrections. Your key usage pattern (${mostUsedKeys.join(", ")}) shows structured programming habits. **Interview Tip:** This practical balance of speed and accuracy reflects real-world coding skills.`
+        }
+      },
+      () => {
+        if (showsHesitation) {
+          return `**Problem-Solving Pattern:** ${longPauses} extended thinking periods in your coding session show thorough analysis - excellent for complex problems! Your ${wpm} WPM between pauses maintains good implementation speed. **Interview Tip:** These thinking moments are valuable - narrate them: "I'm considering the time complexity" or "Let me think about edge cases."`
+        } else if (isTypingFast) {
+          return `**Problem-Solving Pattern:** Confident implementation style! ${wpm} WPM with ${rapidBursts} quick sequences suggests you have a clear mental model. Your ${Math.round(errorRate * 100)}% error rate shows controlled speed. **Interview Tip:** This confidence is great, but remember to explain your approach as you code quickly.`
+        } else {
+          return `**Problem-Solving Pattern:** Methodical problem-solving approach with ${avgTimeBetweenKeys.toFixed(0)}ms average keystroke timing. Your ${Math.round(errorRate * 100)}% error rate and ${longPauses} strategic pauses show careful consideration. **Interview Tip:** This thoughtful approach is perfect for demonstrating your problem-solving process step by step.`
         }
       },
     ]
 
-    const idx = Math.floor((Date.now() / 60000) % feedbackOptions.length)
-    return feedbackOptions[idx]()
+    const currentTime = Date.now()
+    const feedbackIndex = Math.floor((currentTime / 60000) % feedbackOptions.length)
+    return feedbackOptions[feedbackIndex]()
   }
 
   const handleSendMessage = async () => {
@@ -253,15 +289,12 @@ export default function TeacherSidebar({
       addMessage(inputMessage, "user", "user")
       const currentInput = inputMessage
       setInputMessage("")
-
       setIsTyping(true)
 
       try {
         const response = await fetch("/api/teacher/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: currentInput,
             context: {
@@ -271,11 +304,7 @@ export default function TeacherSidebar({
               lessonTitle: currentLesson?.title || "Programming Practice",
               lessonDescription: currentLesson?.description || "Interactive programming assistance",
             },
-            aiConfig: {
-              model: "claude-3-5-haiku-20241022",
-              maxTokens: 1000,
-              temperature: 0.7,
-            },
+            aiConfig: { model: "claude-3-5-haiku-20241022", maxTokens: 1000, temperature: 0.7 },
           }),
         })
 
@@ -285,28 +314,21 @@ export default function TeacherSidebar({
         }
 
         const data = await response.json()
-
         setIsTyping(false)
         addMessage(data.message || "I'm sorry, I couldn't process that request right now.")
       } catch (error) {
         console.error("[v0] Error sending message:", error)
         setIsTyping(false)
 
-        if (error instanceof Error && error.message.includes("api_key")) {
-          addMessage(
-            "⚠️ **Configuration Required**: I need a Claude API key to respond. Please add your ANTHROPIC_API_KEY to the environment variables.",
-            "teacher",
-            "teacher",
-          )
-        } else if (error instanceof Error && error.message.includes("rate_limit")) {
-          addMessage("⏱️ **Rate Limited**: Too many requests. Please wait a moment and try again.", "teacher", "teacher")
-        } else {
-          addMessage(
-            "🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.",
-            "teacher",
-            "teacher",
-          )
-        }
+        addMessage(
+          error instanceof Error && error.message.includes("api_key")
+            ? "⚠️ **Configuration Required**: I need a Claude API key to respond. Please add your ANTHROPIC_API_KEY to the environment variables."
+            : error instanceof Error && error.message.includes("rate_limit")
+              ? "⏱️ **Rate Limited**: Too many requests. Please wait a moment and try again."
+              : "🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.",
+          "teacher",
+          "teacher",
+        )
       }
     }
   }
@@ -319,8 +341,10 @@ export default function TeacherSidebar({
   }
 
   const generateLecture = async () => {
+    console.log("[v0] Generate lecture clicked, currentLesson:", currentLesson)
     if (!currentLesson) return
 
+    console.log("[v0] Starting lecture generation for lesson:", currentLessonId)
     setIsLoadingLecture(true)
     try {
       const response = await fetch("/api/teacher/lecture", {
@@ -334,11 +358,15 @@ export default function TeacherSidebar({
         }),
       })
 
+      console.log("[v0] API response status:", response.status)
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Lecture content received:", data)
         setLectureContent(data.lectureContent)
       } else {
         const errorData = await response.json()
+        console.log("[v0] API error response:", errorData)
+
         if (response.status === 503) {
           addMessage(
             "🔄 **Service Temporarily Unavailable**: The Claude API is experiencing connectivity issues. This is usually temporary - please try again in a few moments.",
@@ -357,20 +385,26 @@ export default function TeacherSidebar({
         setLectureContent(null)
       }
     } catch (error) {
+      console.log("[v0] Fetch error:", error)
       addMessage(
-        "🔌 **Connection Error**: Unable to connect to the lecture generation service. Please check your internet connection and try again.",
+        error instanceof Error && (error.message.includes("fetch") || error.message.includes("network"))
+          ? "🌐 **Network Error**: Unable to connect to the lecture generation service. Please try again in a few moments."
+          : "🔌 **Connection Error**: Unable to connect to the lecture generation service. Please check your internet connection and try again.",
         "teacher",
         "teacher",
       )
       setLectureContent(null)
     } finally {
       setIsLoadingLecture(false)
+      console.log("[v0] Lecture generation completed")
     }
   }
 
   const generateQuestion = async () => {
+    console.log("[v0] Generate question clicked, currentLesson:", currentLesson)
     if (!currentLesson) return
 
+    console.log("[v0] Starting question generation for lesson:", currentLessonId)
     setIsLoadingQuestion(true)
     try {
       const response = await fetch("/api/questions/generate", {
@@ -384,8 +418,10 @@ export default function TeacherSidebar({
         }),
       })
 
+      console.log("[v0] API response status:", response.status)
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Question content received:", data)
         if (data.questions && data.questions.length > 0) {
           const question = data.questions[0]
           setGeneratedQuestion({
@@ -396,10 +432,13 @@ export default function TeacherSidebar({
             followUpQuestions: question.followUpQuestions || [],
           })
         } else {
+          console.log("[v0] No questions in response")
           setGeneratedQuestion(null)
         }
       } else {
         const errorData = await response.json()
+        console.log("[v0] API error response:", errorData)
+
         if (errorData.error?.includes("api_key") || errorData.error?.includes("ANTHROPIC_API_KEY")) {
           addMessage(
             "⚠️ **Configuration Required**: I need a Claude API key to generate questions. Please add your ANTHROPIC_API_KEY to the environment variables in your Vercel project settings.",
@@ -412,6 +451,7 @@ export default function TeacherSidebar({
         setGeneratedQuestion(null)
       }
     } catch (error) {
+      console.log("[v0] Fetch error:", error)
       addMessage(
         "🔌 **Connection Error**: Unable to connect to the question generation service. Please check your internet connection and try again.",
         "teacher",
@@ -420,6 +460,7 @@ export default function TeacherSidebar({
       setGeneratedQuestion(null)
     } finally {
       setIsLoadingQuestion(false)
+      console.log("[v0] Question generation completed")
     }
   }
 
@@ -430,7 +471,8 @@ export default function TeacherSidebar({
     if (activeTab === "question" && !generatedQuestion && !isLoadingQuestion) {
       generateQuestion()
     }
-  }, [activeTab, currentLessonId]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentLessonId])
 
   useEffect(() => {
     setLectureContent(null)
@@ -442,6 +484,14 @@ export default function TeacherSidebar({
 
     try {
       const currentCode = (window as any).getCurrentCode?.() || ""
+
+      console.log("[v0] Submitting solution:", {
+        lessonId: currentLessonId,
+        codeLength: currentCode.length,
+        hasAudio: !!recordedAudio,
+        hasTranscription: !!transcription,
+        transcriptionLength: transcription?.length || 0,
+      })
 
       await submitSolution({
         lessonId: currentLessonId,
@@ -461,6 +511,7 @@ export default function TeacherSidebar({
 
   useEffect(() => {
     if (result) {
+      console.log("[v0] Result received, showing summary modal:", result)
       setShowSummaryModal(true)
     }
   }, [result])
@@ -468,7 +519,11 @@ export default function TeacherSidebar({
   useEffect(() => {
     if (shouldRequestHint && activeTab === "teacher" && onHintRequested) {
       const currentCode = (window as any).getCurrentCode?.() || ""
+
+      console.log("[v0] Getting hint for current code:", currentCode)
+
       const hintMessage = `I need a hint for the current problem. Here's my current code:\n\n\`\`\`python\n${currentCode}\n\`\`\`\n\nCan you give me a small hint to help me move forward without giving away the complete solution?`
+
       addMessage(hintMessage, "user", "user")
       handleHintRequest(hintMessage)
       onHintRequested()
@@ -483,7 +538,7 @@ export default function TeacherSidebar({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message,
+          message: message,
           context: {
             userId: "user-123",
             sessionId: "session-" + Date.now(),
@@ -492,11 +547,7 @@ export default function TeacherSidebar({
             lessonDescription: currentLesson?.description || "Interactive programming assistance",
             isHintRequest: true,
           },
-          aiConfig: {
-            model: "claude-3-5-haiku-20241022",
-            maxTokens: 1000,
-            temperature: 0.7,
-          },
+          aiConfig: { model: "claude-3-5-haiku-20241022", maxTokens: 1000, temperature: 0.7 },
         }),
       })
 
@@ -522,7 +573,11 @@ export default function TeacherSidebar({
       } else if (error instanceof Error && error.message.includes("rate_limit")) {
         addMessage("⏱️ **Rate Limited**: Too many requests. Please wait a moment and try again.", "teacher", "teacher")
       } else {
-        addMessage("🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.", "teacher", "teacher")
+        addMessage(
+          "🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.",
+          "teacher",
+          "teacher",
+        )
       }
     }
   }
@@ -580,9 +635,7 @@ export default function TeacherSidebar({
             {activeTab === "lecture" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-green-600 animate-pulse"></div>
             )}
-            <BookOpen
-              className={`w-4 h-4 transition-all duration-300 ${activeTab === "lecture" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`}
-            />
+            <BookOpen className={`w-4 h-4 transition-all duration-300 ${activeTab === "lecture" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`} />
             Lecture
           </button>
 
@@ -597,9 +650,7 @@ export default function TeacherSidebar({
             {activeTab === "question" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-green-600 animate-pulse"></div>
             )}
-            <Pin
-              className={`w-4 h-4 transition-all duration-300 ${activeTab === "question" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`}
-            />
+            <Pin className={`w-4 h-4 transition-all duration-300 ${activeTab === "question" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`} />
             Question
           </button>
 
@@ -614,9 +665,7 @@ export default function TeacherSidebar({
             {activeTab === "teacher" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-green-600 animate-pulse"></div>
             )}
-            <MessageCircle
-              className={`w-4 h-4 transition-all duration-300 ${activeTab === "teacher" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`}
-            />
+            <MessageCircle className={`w-4 h-4 transition-all duration-300 ${activeTab === "teacher" ? "text-green-600 scale-110" : "text-gray-500 group-hover:scale-105"}`} />
             Teacher
           </button>
         </div>
@@ -845,14 +894,8 @@ export default function TeacherSidebar({
                 <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-sm border border-green-200/50 p-4 rounded-2xl shadow-lg shadow-green-100/30 border-l-4 border-l-green-500">
                   <div className="flex space-x-1">
                     <div className="w-1.5 h-1.5 bg-green-600 rounded-full animate-bounce shadow-sm"></div>
-                    <div
-                      className="w-1.5 h-1.5 bg-green-600 rounded-full animate-bounce shadow-sm"
-                      style={{ animationDelay: "0.1s" }}
-                    ></div>
-                    <div
-                      className="w-1.5 h-1.5 bg-green-600 rounded-full animate-bounce shadow-sm"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
+                    <div className="w-1.5 h-1.5 bg-green-600 rounded-full animate-bounce shadow-sm" style={{ animationDelay: "0.1s" }}></div>
+                    <div className="w-1.5 h-1.5 bg-green-600 rounded-full animate-bounce shadow-sm" style={{ animationDelay: "0.2s" }}></div>
                   </div>
                   <span className="text-sm text-gray-500">Typing...</span>
                 </div>
