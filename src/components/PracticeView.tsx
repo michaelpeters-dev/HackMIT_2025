@@ -2,6 +2,7 @@
 
 import { useState, createContext, useContext, useRef, useEffect } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import TeacherSidebar from "./TeacherSidebar"
 import IDEPanel from "./IDEPanel"
 import { useLessons } from "../hooks/useApi"
@@ -239,18 +240,20 @@ export default function PracticeView() {
       <nav className="bg-white/95 backdrop-blur-xl h-16 px-6 flex items-center justify-center border-b border-gray-200/50 shadow-lg shadow-gray-100/50 sticky top-0 z-50">
         <div className="flex items-center">
           <div className="flex items-center space-x-4 absolute left-6">
-            <div className="w-10 h-10 rounded-lg overflow-hidden">
-              <Image
-                src="/logo.png"
-                alt="CodeMind Logo"
-                width={40}
-                height={40}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Yu<span className="text-green-600">Code</span>
-            </h1>
+            <Link href="/" className="flex items-center space-x-4">
+              <div className="w-10 h-10 rounded-lg overflow-hidden hover:opacity-80 transition-opacity duration-200">
+                <Image
+                  src="/logo.png"
+                  alt="YuCode Logo"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-800">
+                Yu<span className="text-green-600">Code</span>
+              </h1>
+            </Link>
           </div>
         </div>
 
