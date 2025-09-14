@@ -1,4 +1,4 @@
-# CodeMind 
+# YuCode 
 
 <img width="500" height="490" alt="image" src="https://github.com/user-attachments/assets/46e7eade-cacf-4601-94c1-02145e7809db" />
 
@@ -27,7 +27,7 @@
 
 ## Project Description
 
-CodeMind is a reimagined Minimum Viable Product (MVP) inspired by the interactive learning experience of platforms like Codecademy. Our goal is to provide an accessible and engaging environment for users to learn coding concepts through hands-on exercises directly within their browser. Deployed on Vercel, CodeMind offers a fast and responsive learning platform, focusing on fundamental programming concepts with immediate feedback.
+YuCode is a reimagined Minimum Viable Product (MVP) inspired by the interactive learning experience of platforms like Codecademy. Our goal is to provide an accessible and engaging environment for users to learn coding concepts through hands-on exercises directly within their browser. Deployed on Vercel, YuCode offers a fast and responsive learning platform, focusing on fundamental programming concepts with immediate feedback.
 
 This project was built with the vision of streamlining the interactive coding lesson experience, offering a clear path for beginners to grasp core concepts without the overhead of complex setups.
 
@@ -37,7 +37,7 @@ Experience CodeMind live on Vercel: [https://hackmit2025.vercel.app/](https://ha
 
 ## Features
 
-As an MVP, CodeMind currently offers:
+As an MVP, YuCode currently offers:
 
 * **Interactive Code Editor:** An integrated editor where users can write and execute code directly.
 * **Lesson-based Learning:** Structured lessons guiding users through programming concepts.
@@ -47,12 +47,12 @@ As an MVP, CodeMind currently offers:
 
 ## How it Differs from Codecademy (MVP)
 
-While CodeMind draws inspiration from Codecademy, our MVP distinguishes itself in a few key areas:
+While YuCode draws inspiration from Codecademy, our MVP distinguishes itself in a few key areas:
 
-1.  **Focused Scope:** CodeMind's MVP is laser-focused on the core interactive coding experience. We've prioritized building a robust in-browser code execution and feedback loop over a vast library of courses or complex social features. This allows us to quickly iterate and refine the fundamental learning mechanism.
-2.  **Simplified Architecture:** Built with a modern, lightweight tech stack (e.g., Next.js for frontend, a simple backend for evaluation if needed), CodeMind aims for maximum efficiency and speed. Codecademy, as a mature platform, naturally has a more complex and feature-rich architecture.
+1.  **Focused Scope:** YuCode's MVP is laser-focused on the core interactive coding experience. We've prioritized building a robust in-browser code execution and feedback loop over a vast library of courses or complex social features. This allows us to quickly iterate and refine the fundamental learning mechanism.
+2.  **Simplified Architecture:** Built with a modern, lightweight tech stack (e.g., Next.js for frontend, a simple backend for evaluation if needed), YuCode aims for maximum efficiency and speed. Codecademy, as a mature platform, naturally has a more complex and feature-rich architecture.
 3.  **Customizable Lesson Structure:** Our design allows for straightforward integration of new lessons and challenges, making it easier to tailor content to specific learning goals or rapidly prototype new course ideas without being constrained by a legacy content management system.
-4.  **Community-Driven Potential (Future):** While not in the MVP, the lean nature of CodeMind provides a strong foundation for future community-driven content creation, where users or educators could potentially contribute new lessons, a feature that might be more difficult to implement on established, large-scale platforms.
+4.  **Community-Driven Potential (Future):** While not in the MVP, the lean nature of YuCode provides a strong foundation for future community-driven content creation, where users or educators could potentially contribute new lessons, a feature that might be more difficult to implement on established, large-scale platforms.
 
 ## Future Scaling Opportunities
 
@@ -82,7 +82,7 @@ Given more time and resources, CodeMind has significant potential for growth and
 
 ## Getting Started
 
-To get a local copy of CodeMind up and running, follow these steps.
+To get a local copy of YuCode up and running, follow these steps.
 
 ### Prerequisites
 
