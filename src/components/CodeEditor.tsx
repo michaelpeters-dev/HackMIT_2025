@@ -134,13 +134,49 @@ export default function CodeEditor() {
     })
   }
 
+  const convertFStringsToFormat = (code: string): string => {
+    // Convert f-strings like f"Hello {name}" to "Hello {}".format(name)
+    return code
+      .replace(/f"([^"]*?)"/g, (match, content) => {
+        const variables: string[] = []
+        const formatString = content.replace(/\{([^}]+)\}/g, (varMatch: string, varName: string) => {
+          variables.push(varName.trim())
+          return "{}"
+        })
+
+        if (variables.length > 0) {
+          return `"${formatString}".format(${variables.join(", ")})`
+        }
+        return `"${formatString}"`
+      })
+      .replace(/f'([^']*?)'/g, (match, content) => {
+        const variables: string[] = []
+        const formatString = content.replace(/\{([^}]+)\}/g, (varMatch: string, varName: string) => {
+          variables.push(varName.trim())
+          return "{}"
+        })
+
+        if (variables.length > 0) {
+          return `'${formatString}'.format(${variables.join(", ")})`
+        }
+        return `'${formatString}'`
+      })
+  }
+
   const executeCode = async (code: string): Promise<string> => {
     try {
       setIsExecuting(true)
       console.log("[v0] Starting code execution with code:", code)
+      console.log("[v0] Skulpt loaded:", skulptLoaded)
+      console.log("[v0] Skulpt object available:", !!(window as any).Sk)
 
       if (skulptLoaded && (window as any).Sk && (window as any).Sk.misceval) {
         console.log("[v0] Using Skulpt for Python execution")
+
+        const convertedCode = convertFStringsToFormat(code)
+        console.log("[v0] Original code:", code)
+        console.log("[v0] Converted code:", convertedCode)
+
         return await new Promise<string>((resolve) => {
           let output = ""
 
@@ -148,6 +184,7 @@ export default function CodeEditor() {
           ;(window as any).Sk.pre = "output"
           ;(window as any).Sk.configure({
             output: (text: string) => {
+              console.log("[v0] Skulpt output:", text)
               output += text
             },
             read: (x: string) => {
@@ -161,13 +198,13 @@ export default function CodeEditor() {
             },
           })
 
-          // Execute Python code
+          console.log("[v0] Skulpt configured, starting execution")
           ;(window as any).Sk.misceval
             .asyncToPromise(() => {
-              return (window as any).Sk.importMainWithBody("<stdin>", false, code, true)
+              return (window as any).Sk.importMainWithBody("<stdin>", false, convertedCode, true)
             })
             .then(() => {
-              console.log("[v0] Skulpt execution completed, output:", output)
+              console.log("[v0] Skulpt execution completed successfully, output:", output)
               resolve(output || "Code executed successfully!")
             })
             .catch((err: any) => {
@@ -184,12 +221,15 @@ export default function CodeEditor() {
           .filter((line) => line && !line.startsWith("#"))
         let output = ""
 
+        console.log("[v0] Processing lines with fallback:", lines)
+
         for (const line of lines) {
           if (line.startsWith("print(")) {
             // Extract content from print statement
             const match = line.match(/print$$(.+)$$/)
             if (match) {
               let content = match[1].trim()
+              console.log("[v0] Found print statement, content:", content)
               // Remove quotes if present
               if (
                 (content.startsWith('"') && content.endsWith('"')) ||
@@ -202,6 +242,7 @@ export default function CodeEditor() {
           }
         }
 
+        console.log("[v0] Fallback execution completed, output:", output)
         return output || "Code executed successfully!"
       }
     } catch (error) {
@@ -209,23 +250,28 @@ export default function CodeEditor() {
       return `Execution Error: ${error}`
     } finally {
       setIsExecuting(false)
+      console.log("[v0] Code execution finished")
     }
   }
 
   useEffect(() => {
     // Make executeCode available globally for FooterControls
+    console.log("[v0] Setting up global executeCode function")
     ;(window as any).executeCode = async () => {
       console.log("[v0] executeCode called from FooterControls")
+      console.log("[v0] Current code to execute:", code)
+      console.log("[v0] Skulpt loaded status:", skulptLoaded)
       const result = await executeCode(code)
-      console.log("[v0] Setting output:", result)
+      console.log("[v0] Execution result:", result)
       setOutput(result)
       setHasRun(true)
-      console.log("[v0] hasRun set to true")
+      console.log("[v0] Output set and hasRun set to true")
     }
     ;(window as any).getCurrentCode = () => {
       console.log("[v0] getCurrentCode called, returning current code:", code)
       return code
     }
+    console.log("[v0] Global functions registered successfully")
   }, [code, skulptLoaded])
 
   useEffect(() => {
