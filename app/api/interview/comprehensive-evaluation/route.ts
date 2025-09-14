@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { lessons } from "../../../../src/data/lessons"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,18 @@ export async function POST(request: NextRequest) {
       keystrokesLength: keystrokes?.length || 0,
     })
 
+    const lesson = lessons.find((l) => l.id === Number.parseInt(lessonId))
+    const questionContext = lesson
+      ? {
+          title: lesson.title,
+          difficulty: lesson.difficulty,
+          category: lesson.category,
+          description: lesson.description,
+          problem: lesson.problem,
+          expectedOutput: lesson.expectedOutput,
+        }
+      : null
+
     // Parse keystrokes if provided
     let keystrokeData = []
     if (keystrokes) {
@@ -25,39 +38,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if we have the required API key
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.log("[v0] No ANTHROPIC_API_KEY found, using mock evaluation")
-      return NextResponse.json({
-        data: generateMockEvaluation(code, transcription),
-        success: true,
-      })
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      console.error("[v0] ANTHROPIC_API_KEY environment variable is not set")
+      return NextResponse.json(
+        {
+          error: "Claude API key not configured. Please add ANTHROPIC_API_KEY to your environment variables.",
+          details: "The ANTHROPIC_API_KEY environment variable is missing from your deployment.",
+        },
+        { status: 500 },
+      )
     }
 
-    // Make Claude API call for comprehensive evaluation
-    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-haiku-20241022",
-        max_tokens: 1500,
-        temperature: 0.3,
-        messages: [
-          {
-            role: "user",
-            content: `You are an expert technical interviewer evaluating a candidate's performance. Analyze both their code solution and verbal explanation.
+    console.log("[v0] API key found, making direct API call to Claude for evaluation")
 
-CODE SOLUTION:
+    const claudePrompt = `You are an expert coding instructor evaluating a student's solution to a programming exercise.
+
+LESSON CONTEXT:
+${
+  questionContext
+    ? `
+Title: ${questionContext.title}
+Difficulty: ${questionContext.difficulty}
+Category: ${questionContext.category}
+Description: ${questionContext.description}
+Problem: ${questionContext.problem}
+Expected Output: ${questionContext.expectedOutput.join(", ")}
+`
+    : "No lesson context available"
+}
+
+STUDENT'S CODE SOLUTION:
 ${code || "No code provided"}
 
-VERBAL EXPLANATION (transcribed):
+STUDENT'S VERBAL EXPLANATION (transcribed):
 ${transcription || "No verbal explanation provided"}
 
-KEYSTROKE DATA:
+ADDITIONAL DATA:
 ${keystrokeData.length > 0 ? `${keystrokeData.length} keystrokes recorded` : "No keystroke data"}
 
 Please provide a comprehensive evaluation in JSON format with the following structure:
@@ -79,14 +96,32 @@ Please provide a comprehensive evaluation in JSON format with the following stru
 }
 
 Evaluation criteria:
-- Code correctness and logic
-- Code quality, efficiency, and readability
-- Verbal explanation clarity and technical accuracy
-- Overall interview performance and confidence
-- Look for filler words (um, uh, like) and hesitation in transcription
-- Assess problem-solving approach and communication skills
+- Does the code correctly solve the specific problem described in the lesson?
+- Code quality, efficiency, and readability appropriate for the difficulty level
+- How well does the verbal explanation demonstrate understanding of the concept?
+- Overall learning progress and confidence for this specific topic
+- Consider the lesson difficulty when setting expectations
+- Provide encouraging, educational feedback that helps the student learn
 
-Provide constructive feedback that helps the candidate improve their interview skills.`,
+Focus on whether the student understood and correctly implemented the specific lesson concept (${questionContext?.title || "the programming concept"}).`
+
+    console.log("[v0] Making request to Claude API for comprehensive evaluation")
+
+    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-5-haiku-20241022",
+        max_tokens: 1500,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "user",
+            content: claudePrompt,
           },
         ],
       }),
@@ -96,19 +131,42 @@ Provide constructive feedback that helps the candidate improve their interview s
       const errorText = await claudeResponse.text()
       console.error("[v0] Claude API error:", claudeResponse.status, errorText)
 
-      return NextResponse.json({
-        data: generateMockEvaluation(code, transcription),
-        success: true,
-      })
+      if (claudeResponse.status === 401) {
+        return NextResponse.json(
+          {
+            error: "Claude API key authentication failed. Please check your ANTHROPIC_API_KEY.",
+            details: errorText,
+          },
+          { status: 500 },
+        )
+      }
+
+      if (claudeResponse.status === 429) {
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded. Please try again in a moment.",
+            details: errorText,
+          },
+          { status: 429 },
+        )
+      }
+
+      return NextResponse.json(
+        {
+          error: "Claude API request failed",
+          details: `HTTP ${claudeResponse.status}: ${errorText}`,
+        },
+        { status: 500 },
+      )
     }
 
     const claudeData = await claudeResponse.json()
-    console.log("[v0] Claude response received:", claudeData)
+    console.log("[v0] Claude response received successfully")
 
     let evaluationResult
     try {
       const responseText = claudeData.content[0].text
-      console.log("[v0] Raw Claude response:", responseText)
+      console.log("[v0] Processing Claude response for evaluation")
 
       // Extract JSON from Claude's response (handle markdown formatting)
       let jsonText = responseText
@@ -125,32 +183,65 @@ Provide constructive feedback that helps the candidate improve their interview s
       }
 
       evaluationResult = JSON.parse(jsonText)
-      console.log("[v0] Parsed evaluation result:", evaluationResult)
+      console.log("[v0] Successfully parsed Claude evaluation result")
     } catch (parseError) {
       console.error("[v0] Failed to parse Claude response:", parseError)
       console.log("[v0] Raw response text:", claudeData.content[0].text)
 
-      // Fallback to mock evaluation
-      evaluationResult = generateMockEvaluation(code, transcription)
+      return NextResponse.json(
+        {
+          error: "Failed to parse Claude evaluation response",
+          details: "The AI response could not be processed. Please try again.",
+        },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({
       data: evaluationResult,
       success: true,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        lessonId,
+        model: "claude-3-5-haiku-20241022",
+      },
     })
   } catch (error) {
     console.error("[v0] Comprehensive evaluation error:", error)
 
-    // Return mock evaluation as fallback
-    const mockResult = generateMockEvaluation("", "")
-    return NextResponse.json({
-      data: mockResult,
-      success: true,
-    })
+    if (error instanceof Error) {
+      if (error.message.includes("api_key") || error.message.includes("authentication")) {
+        return NextResponse.json(
+          {
+            error: "Claude API key authentication failed. Please check your ANTHROPIC_API_KEY.",
+            details: error.message,
+          },
+          { status: 500 },
+        )
+      }
+
+      if (error.message.includes("rate_limit")) {
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded. Please try again in a moment.",
+            details: error.message,
+          },
+          { status: 429 },
+        )
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: "Failed to evaluate submission",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
-function generateMockEvaluation(code: string, transcription: string) {
+function generateMockEvaluation(code: string, transcription: string, questionContext: any) {
   const hasCode = code && code.trim().length > 0
   const hasTranscription = transcription && transcription.trim().length > 0
 
@@ -196,23 +287,27 @@ function generateMockEvaluation(code: string, transcription: string) {
   const audioExplanation = hasTranscription ? Math.floor(Math.random() * 20) + 70 : 0
   const audioConfidence = hasTranscription ? Math.max(50, 85 - fillerWordCount * 3 + confidenceIndicators * 5) : 0
 
-  let feedback = "Mock evaluation: "
+  let feedback = ""
+  if (questionContext) {
+    feedback += `Evaluation for "${questionContext.title}" (${questionContext.difficulty}): `
+  }
+
   if (hasCode && hasTranscription) {
-    feedback += `Great job providing both a code solution and verbal explanation! Your confidence score of ${confidenceScore}% reflects good technical communication. `
+    feedback += `Great job providing both a code solution and verbal explanation! Your confidence score of ${confidenceScore}% reflects good understanding of the concept. `
     if (fillerWordCount > 3) {
       feedback += `Try to reduce filler words (detected ${fillerWordCount}) to sound more confident. `
     }
     if (confidenceIndicators > 0) {
       feedback += "Your use of confident language shows good technical understanding. "
     }
-    feedback += "Continue practicing to improve your interview performance."
+    feedback += "Continue practicing to improve your coding skills."
   } else if (hasCode) {
-    feedback += `You provided a code solution (${confidenceScore}% confidence), but adding verbal explanation would significantly improve your interview performance. Practice explaining your thought process out loud.`
+    feedback += `You provided a code solution (${confidenceScore}% confidence), but adding verbal explanation would help demonstrate your understanding of the concept. Practice explaining your thought process.`
   } else if (hasTranscription) {
-    feedback += `Good verbal communication detected, but no code solution was provided. Make sure to implement your ideas in code during technical interviews.`
+    feedback += `Good verbal communication detected, but no code solution was provided. Make sure to implement your ideas in code to practice the concept.`
   } else {
     feedback +=
-      "No code or verbal explanation detected. In technical interviews, provide both a working solution and clear explanation of your approach."
+      "No code or verbal explanation detected. Try implementing the solution and explaining your approach to better learn the concept."
   }
 
   return {
