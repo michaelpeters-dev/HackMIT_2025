@@ -55,11 +55,15 @@ Your response must be a valid JSON object with this exact structure:
 }
 
 CRITICAL: Generate questions that are:
+- SUPER BEGINNER-FRIENDLY and focus on ONE SKILL ONLY
 - DIRECTLY focused on practicing the specific lesson topic (not general programming)
-- Appropriate for the specified difficulty level
-- Require using the exact concepts taught in the lesson
-- Clear and unambiguous
-- Include practical test cases that demonstrate the lesson concept`,
+- SIMPLE and straightforward - avoid complex scenarios or multiple concepts
+- Use basic examples that a complete beginner can understand
+- Target exactly ONE concept from the lesson - don't combine multiple skills
+- Keep the problem statement short and clear
+- Use familiar, everyday examples (names, simple numbers, basic text)
+- Avoid advanced programming concepts, complex logic, or mathematical operations
+- Make the expected solution 2-5 lines of code maximum`,
         messages: [
           {
             role: "user",
@@ -70,14 +74,26 @@ CRITICAL: Generate questions that are:
 **Difficulty**: ${difficulty}
 **Category**: ${category}
 
-IMPORTANT: The question MUST be directly related to "${topic}" and should require the student to practice the specific concepts from this lesson. Do not create generic programming questions - focus specifically on the lesson topic.
+CRITICAL REQUIREMENTS:
+1. The question MUST focus on ONLY ONE SKILL from the "${topic}" lesson
+2. Keep it SUPER SIMPLE - suitable for complete beginners
+3. Use basic, everyday examples (like printing "Hello", displaying names, simple numbers)
+4. Avoid combining multiple concepts or complex scenarios
+5. The solution should be 2-5 lines of code maximum
+6. Use clear, simple language that beginners can understand
 
-For example:
-- If the topic is "Print Statements", create questions that require using print() functions
-- If the topic is "Variables", create questions about declaring and using variables
-- If the topic is "Loops", create questions that require writing loops
+EXAMPLES OF GOOD BEGINNER QUESTIONS:
+- Print Statements: "Write a print statement to display 'Hello World'"
+- Variables: "Create a variable called 'name' and store your name in it"
+- Input: "Ask the user for their favorite color using input()"
 
-The question should help students practice what they just learned in the "${topic}" lesson.`,
+AVOID:
+- Complex scenarios involving multiple steps
+- Mathematical calculations or advanced logic
+- Combining multiple programming concepts
+- Real-world applications that require domain knowledge
+
+The question should help students practice the specific "${topic}" concept they just learned in the most basic way possible.`,
           },
         ],
       }),
