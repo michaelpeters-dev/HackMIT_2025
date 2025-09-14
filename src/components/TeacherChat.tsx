@@ -65,7 +65,7 @@ export default function TeacherChat() {
             lessonDescription: "Interactive programming assistance and learning support",
           },
           aiConfig: {
-            model: "claude-3-sonnet-20240229",
+            model: "claude-3-5-haiku-20241022",
             maxTokens: 1000,
             temperature: 0.7,
           },
