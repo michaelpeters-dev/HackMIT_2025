@@ -1,4 +1,4 @@
-# CodeMind <img width="1088" height="960" alt="image" src="https://github.com/user-attachments/assets/46e7eade-cacf-4601-94c1-02145e7809db" />
+# CodeMind <img width="500" height="490" alt="image" src="https://github.com/user-attachments/assets/46e7eade-cacf-4601-94c1-02145e7809db" />
 
 
 
