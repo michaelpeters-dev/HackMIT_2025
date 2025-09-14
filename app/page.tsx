@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
+import { useEffect, useRef } from "react"
+import Link from "next/link"
+import Image from "next/image"
+// Removed incorrect import; use built-in HTMLCanvasElement type
 
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -11,7 +12,7 @@ export default function LandingPage() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext("2d")
     if (!ctx) return
 
     // Set canvas size
@@ -20,84 +21,60 @@ export default function LandingPage() {
       canvas.height = window.innerHeight
     }
     resizeCanvas()
-    window.addEventListener('resize', resizeCanvas)
+    window.addEventListener("resize", resizeCanvas)
 
-    // Particle system
     const particles: Array<{
       x: number
       y: number
+      radius: number
+      color: string
+      opacity: number
       vx: number
       vy: number
-      size: number
-      opacity: number
-      life: number
-      maxLife: number
     }> = []
 
-    // Create particles
     const createParticle = () => {
       return {
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1,
-        opacity: Math.random() * 0.5 + 0.1,
-        life: 0,
-        maxLife: Math.random() * 200 + 100
+        radius: 1 + Math.random() * 3,
+        color: `rgba(102, 187, 106, ${0.3 + Math.random() * 0.7})`,
+        opacity: 0.3 + Math.random() * 0.7,
+        vx: (Math.random() - 0.5) * 1,
+        vy: (Math.random() - 0.5) * 1,
       }
     }
 
-    // Initialize particles
-    for (let i = 0; i < 30; i++) {
+    // Create particles
+    for (let i = 0; i < 50; i++) {
       particles.push(createParticle())
     }
 
-    // Animation loop
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      // Update and draw particles
-      particles.forEach((particle, index) => {
+      // Animate particles
+      particles.forEach((particle) => {
         particle.x += particle.vx
         particle.y += particle.vy
-        particle.life++
 
-        // Fade out over time
-        const lifeRatio = particle.life / particle.maxLife
-        particle.opacity = (1 - lifeRatio) * 0.6
-
-        // Reset particle if it's dead or off screen
-        if (particle.life >= particle.maxLife || 
-            particle.x < 0 || particle.x > canvas.width || 
-            particle.y < 0 || particle.y > canvas.height) {
-          particles[index] = createParticle()
+        // Bounce off edges
+        if (particle.x <= particle.radius || particle.x >= canvas.width - particle.radius) {
+          particle.vx *= -1
+        }
+        if (particle.y <= particle.radius || particle.y >= canvas.height - particle.radius) {
+          particle.vy *= -1
         }
 
         // Draw particle
+        ctx.save()
+        ctx.globalAlpha = particle.opacity
+        ctx.fillStyle = particle.color
         ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(59, 130, 246, ${particle.opacity})`
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2)
         ctx.fill()
+        ctx.restore()
       })
-
-      // Draw connections between nearby particles
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x
-          const dy = particles[i].y - particles[j].y
-          const distance = Math.sqrt(dx * dx + dy * dy)
-
-          if (distance < 100) {
-            ctx.beginPath()
-            ctx.moveTo(particles[i].x, particles[i].y)
-            ctx.lineTo(particles[j].x, particles[j].y)
-            ctx.strokeStyle = `rgba(59, 130, 246, ${0.1 * (1 - distance / 100)})`
-            ctx.lineWidth = 1
-            ctx.stroke()
-          }
-        }
-      }
 
       requestAnimationFrame(animate)
     }
@@ -105,49 +82,42 @@ export default function LandingPage() {
     animate()
 
     return () => {
-      window.removeEventListener('resize', resizeCanvas)
+      window.removeEventListener("resize", resizeCanvas)
     }
   }, [])
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 relative overflow-hidden">
-        {/* Animated Background Canvas */}
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ zIndex: 1 }}
-        />
+      <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-gray-100 relative overflow-hidden">
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} />
 
-        {/* Subtle Grid Pattern */}
-        <div 
-          className="absolute inset-0 opacity-10"
-          style={{ 
+        <div
+          className="absolute inset-0 opacity-3"
+          style={{
             zIndex: 2,
             backgroundImage: `
-              linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
+              linear-gradient(rgba(102, 187, 106, 0.08) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(102, 187, 106, 0.08) 1px, transparent 1px),
+              linear-gradient(45deg, rgba(102, 187, 106, 0.03) 1px, transparent 1px)
             `,
-            backgroundSize: '80px 80px',
-            animation: 'gridMove 30s linear infinite'
-          }} />
+            backgroundSize: "60px 60px, 60px 60px, 120px 120px",
+            animation: "gridMove 40s linear infinite, gridPulse 8s ease-in-out infinite alternate",
+          }}
+        />
 
-
-        {/* Main Content */}
         <div className="relative" style={{ zIndex: 3 }}>
-          {/* Enhanced Navigation */}
           <nav className="absolute top-0 left-0 right-0 flex justify-between items-center p-8 lg:px-16 z-10">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl overflow-hidden hover:scale-110 hover:rotate-6 transition-all duration-300 shadow-lg shadow-green-500/30">
                 <Image
                   src="/logo.png"
-                  alt="CodeMind Logo"
+                  alt="YuCode Logo"
                   width={40}
                   height={40}
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-white text-2xl font-bold">CodeMind</span>
+              <span className="text-gray-800 text-2xl font-bold">YuCode</span>
             </div>
 
             <div>
@@ -160,61 +130,51 @@ export default function LandingPage() {
             </div>
           </nav>
 
-          {/* Hero Section - Enhanced Design */}
           <div className="flex flex-col items-center justify-center h-screen px-8 md:px-12 text-center pt-20">
-            {/* Main Logo/Title */}
             <div className="mb-16">
               <h1 className="text-7xl md:text-8xl font-black mb-8 tracking-tight">
-                <span className="text-white drop-shadow-2xl">
-                  Code
-                </span>
-                <span className="text-green-400 drop-shadow-2xl">
-                  Mind
-                </span>
+                <span className="text-gray-800 drop-shadow-lg">Yu</span>
+                <span className="text-green-500 drop-shadow-lg">Code</span>
               </h1>
-              <div className="w-40 h-1.5 bg-gradient-to-r from-green-400 to-green-600 mx-auto rounded-full shadow-2xl shadow-green-500/50"></div>
+              <div className="w-40 h-1.5 bg-gradient-to-r from-green-400 to-green-600 mx-auto rounded-full shadow-lg shadow-green-500/30"></div>
             </div>
 
-            {/* Enhanced Tagline */}
             <div className="mb-20 max-w-3xl px-12">
-              <p className="text-lg md:text-xl text-gray-300 mb-8 leading-relaxed font-light">
-                First AI-native technical interviewer that evaluates{" "}
-                <span className="bg-gradient-to-r from-green-400 to-green-500 bg-clip-text text-transparent font-medium"> 
-                  how you solve problems
-                </span>, 
-                not just <span className="bg-gradient-to-r from-green-500 to-green-600 bg-clip-text text-transparent font-medium">
-                  what you solve
+              <p className="text-lg md:text-xl text-gray-600 mb-8 leading-relaxed font-light">
+                Learn code and master technical interviews{" "}
+                <span className="bg-gradient-to-r from-green-500 to-green-600 bg-clip-text text-transparent font-medium">
+                  from{" "}
+                </span>
+                <span className="bg-gradient-to-r from-green-600 to-green-700 bg-clip-text text-transparent font-medium">
+                  day one
                 </span>
               </p>
-              <p className="text-sm text-gray-500 font-light">
-                Experience the future of technical interviews with AI that understands your thought process
-              </p>
             </div>
 
-            {/* Enhanced CTA Button */}
             <div className="mt-12">
               <div className="group">
                 <Link
                   href="/practice"
                   className="inline-block bg-gradient-to-r from-green-500 to-green-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl shadow-green-500/30 hover:shadow-green-500/50 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
                 >
-                  Start Practice Now
+                  Practice Now
                   <span className="ml-3 group-hover:translate-x-1 transition-transform duration-300">→</span>
                 </Link>
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
       <style jsx>{`
         @keyframes gridMove {
           0% { transform: translate(0, 0); }
-          100% { transform: translate(80px, 80px); }
+          100% { transform: translate(60px, 60px); }
         }
-        
-        
+        @keyframes gridPulse {
+          0% { opacity: 0.03; }
+          100% { opacity: 0.08; }
+        }
       `}</style>
     </>
   )
