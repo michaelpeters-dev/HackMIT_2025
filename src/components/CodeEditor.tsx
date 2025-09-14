@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
+import { useLessonContext } from "./PracticeView"
+import { useLessons } from "../hooks/useApi"
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -26,6 +28,10 @@ export default function CodeEditor() {
   const [skulptLoaded, setSkulptLoaded] = useState(false)
   const editorRef = useRef<any>(null)
   const outputRef = useRef<HTMLDivElement>(null)
+
+  const { currentLessonId } = useLessonContext()
+  const { lessons } = useLessons()
+  const currentLesson = lessons.find((lesson) => lesson.id === currentLessonId) || lessons[0]
 
   // Load Skulpt Python interpreter
   useEffect(() => {
@@ -100,6 +106,14 @@ export default function CodeEditor() {
     const timeoutId = setTimeout(loadSkulpt, 100)
     return () => clearTimeout(timeoutId)
   }, [])
+
+  useEffect(() => {
+    console.log("[v0] Lesson changed, resetting IDE state")
+    setCode(currentLesson.starterCode || "")
+    setOutput("")
+    setHasRun(false)
+    setIsExecuting(false)
+  }, [currentLessonId, currentLesson.starterCode])
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor
@@ -271,8 +285,15 @@ export default function CodeEditor() {
       console.log("[v0] getCurrentCode called, returning current code:", code)
       return code
     }
+    ;(window as any).resetIDE = () => {
+      console.log("[v0] resetIDE called, clearing all state")
+      setCode(currentLesson.starterCode || "")
+      setOutput("")
+      setHasRun(false)
+      setIsExecuting(false)
+    }
     console.log("[v0] Global functions registered successfully")
-  }, [code, skulptLoaded])
+  }, [code, skulptLoaded, currentLesson.starterCode])
 
   useEffect(() => {
     if (outputRef.current && output) {

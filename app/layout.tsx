@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "CodeMind - AI-Native Coding Education",
+  title: "YuCode",
   description: "AI-powered coding interview preparation platform",
   generator: 'v0.app',
   icons: {

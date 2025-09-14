@@ -141,12 +141,9 @@ export default function LandingPage() {
 
             <div className="mb-20 max-w-3xl px-12">
               <p className="text-lg md:text-xl text-gray-600 mb-8 leading-relaxed font-light">
-                Learn code and master technical interviews{" "}
-                <span className="bg-gradient-to-r from-green-500 to-green-600 bg-clip-text text-transparent font-medium">
-                  from{" "}
-                </span>
+                AI-Powered platform to learn code and master technical interviews, all the way from{" "}
                 <span className="bg-gradient-to-r from-green-600 to-green-700 bg-clip-text text-transparent font-medium">
-                  day one
+                  Day One
                 </span>
               </p>
             </div>
