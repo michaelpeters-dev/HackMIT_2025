@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, createContext, useContext, useRef, useEffect } from "react"
+import Image from "next/image"
 import TeacherSidebar from "./TeacherSidebar"
 import IDEPanel from "./IDEPanel"
 import { useLessons } from "../hooks/useApi"
@@ -238,31 +239,14 @@ export default function PracticeView() {
       <nav className="bg-white/95 backdrop-blur-xl h-16 px-6 flex items-center justify-center border-b border-gray-200/50 shadow-lg shadow-gray-100/50 sticky top-0 z-50">
         <div className="flex items-center">
           <div className="flex items-center space-x-4 absolute left-6">
-            <div className="bg-green-500 p-2 rounded-lg">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 32 32"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="text-white"
-              >
-                <path
-                  d="M16 2C12.5 2 9.5 4.2 8.5 7.3C7.8 7.1 7.1 7 6.4 7C4.5 7 2.8 8.1 2 9.8C1.2 11.5 1.5 13.5 2.8 14.8C2.3 15.8 2 16.9 2 18C2 21.3 4.7 24 8 24C8.7 24 9.4 23.9 10 23.6C11 26.7 14 29 17.5 29C21 29 24 26.7 25 23.6C25.6 23.9 26.3 24 27 24C29.2 24 31 22.2 31 20C31 18.9 30.6 17.9 29.9 17.1C30.5 16.1 30.8 15 30.8 13.8C30.8 10.5 28.1 7.8 24.8 7.8C24.1 7.8 23.4 7.9 22.8 8.2C21.8 4.8 19 2 16 2Z"
-                  fill="white"
-                  fillOpacity="0.2"
-                />
-                <path
-                  d="M16 4C13.2 4 10.8 5.8 10 8.5M8.5 9C7.1 9 5.8 9.7 5.2 10.8C4.6 11.9 4.8 13.2 5.6 14M5 16C5 18.2 6.8 20 9 20M12 22C12.8 24.2 15 25.5 17.5 25.5C20 25.5 22.2 24.2 23 22M26 20C27.1 20 28 19.1 28 18C28 16.9 27.1 16 26 16M27.5 14C27.5 11.5 25.5 9.5 23 9.5M20 7C18.3 5.2 15.7 4.5 13.5 5.5"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="12" cy="14" r="1.5" fill="white" />
-                <circle cx="20" cy="14" r="1.5" fill="white" />
-                <circle cx="16" cy="18" r="1" fill="white" />
-              </svg>
+            <div className="w-10 h-10 rounded-lg overflow-hidden">
+              <Image
+                src="/logo.png"
+                alt="CodeMind Logo"
+                width={40}
+                height={40}
+                className="w-full h-full object-cover"
+              />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">
               Code<span className="text-green-600">Mind</span>

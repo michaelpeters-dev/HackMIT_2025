@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -137,8 +138,14 @@ export default function LandingPage() {
           {/* Enhanced Navigation */}
           <nav className="absolute top-0 left-0 right-0 flex justify-between items-center p-8 lg:px-16 z-10">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-green-600 rounded-xl flex items-center justify-center hover:scale-110 hover:rotate-6 transition-all duration-300 shadow-lg shadow-green-500/30">
-                <span className="text-white font-bold text-lg">C</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden hover:scale-110 hover:rotate-6 transition-all duration-300 shadow-lg shadow-green-500/30">
+                <Image
+                  src="/logo.png"
+                  alt="CodeMind Logo"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
               </div>
               <span className="text-white text-2xl font-bold">CodeMind</span>
             </div>
