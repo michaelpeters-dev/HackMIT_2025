@@ -730,14 +730,7 @@ export default function TeacherSidebar({
             ) : generatedQuestion ? (
               <div className="space-y-4">
                 <div className="bg-white/90 backdrop-blur-sm border border-green-200/50 rounded-2xl p-6 shadow-xl shadow-green-100/20 border-l-4 border-l-green-500">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Pin className="w-5 h-5 text-green-600" />
-                    AI-Generated Technical Interview Question
-                  </h3>
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4">
-                    <p className="text-sm text-gray-600 mb-2 font-medium">
-                      Interview Level: {generatedQuestion.difficulty} | Topic: {generatedQuestion.topic}
-                    </p>
                     <div className="text-sm text-gray-800 leading-relaxed font-medium">
                       {generatedQuestion.question}
                     </div>

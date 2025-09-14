@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] API key found, making direct API call to Claude for question generation")
 
     const body = await request.json()
-    const { difficulty, category, topic, count = 1 } = body
+    const { difficulty, category, topic, context, count = 1 } = body
 
     console.log("[v0] Making request to Claude API for question generation")
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: "claude-3-5-haiku-20241022",
         max_tokens: 2000,
-        system: `You are an expert technical interview question generator. Create realistic, well-structured programming interview questions.
+        system: `You are an expert technical interview question generator. Create realistic, well-structured programming interview questions that are DIRECTLY RELATED to the specific lesson topic.
 
 Your response must be a valid JSON object with this exact structure:
 {
@@ -54,21 +54,30 @@ Your response must be a valid JSON object with this exact structure:
   ]
 }
 
-Generate questions that are:
+CRITICAL: Generate questions that are:
+- DIRECTLY focused on practicing the specific lesson topic (not general programming)
 - Appropriate for the specified difficulty level
-- Relevant to real technical interviews
+- Require using the exact concepts taught in the lesson
 - Clear and unambiguous
-- Include practical test cases`,
+- Include practical test cases that demonstrate the lesson concept`,
         messages: [
           {
             role: "user",
-            content: `Generate ${count} technical interview question(s) with the following criteria:
+            content: `Generate ${count} technical interview question(s) that SPECIFICALLY practice the lesson topic:
 
+**Lesson Topic**: ${topic}
+**Lesson Context**: ${context || "No additional context provided"}
 **Difficulty**: ${difficulty}
 **Category**: ${category}
-**Topic**: ${topic || "General programming concepts"}
 
-Please create realistic interview questions that would be asked at tech companies for this difficulty level.`,
+IMPORTANT: The question MUST be directly related to "${topic}" and should require the student to practice the specific concepts from this lesson. Do not create generic programming questions - focus specifically on the lesson topic.
+
+For example:
+- If the topic is "Print Statements", create questions that require using print() functions
+- If the topic is "Variables", create questions about declaring and using variables
+- If the topic is "Loops", create questions that require writing loops
+
+The question should help students practice what they just learned in the "${topic}" lesson.`,
           },
         ],
       }),
@@ -131,6 +140,7 @@ Please create realistic interview questions that would be asked at tech companie
         difficulty,
         category,
         topic,
+        context,
         model: "claude-3-5-haiku-20241022",
       },
     })

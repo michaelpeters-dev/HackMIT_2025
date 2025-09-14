@@ -323,7 +323,7 @@ export default function CodeEditor() {
             suggestOnTriggerCharacters: true,
             acceptSuggestionOnEnter: "on",
             tabCompletion: "on",
-            wordBasedSuggestions: true,
+            wordBasedSuggestions: "currentDocument",
             // Enable bracket matching and auto-closing
             matchBrackets: "always",
             autoClosingBrackets: "always",
