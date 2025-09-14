@@ -1,6 +1,7 @@
 # CodeMind
 
-[CodeMind Logo](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) 
+[<img width="516" height="496" alt="image" src="https://github.com/user-attachments/assets/7412d3fe-b739-4c09-bfc0-d3fc5f58c642" />
+](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) 
 
 ## Table of Contents
 
