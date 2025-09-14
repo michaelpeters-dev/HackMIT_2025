@@ -1,122 +1,128 @@
-import { type NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
+// app/api/teacher/keystroke-analysis/route.ts
+import { NextResponse } from "next/server"
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+type Keystroke = {
+  timestamp: number
+  key: string
+  action: "keydown" | "keyup"
+  code: string
+}
 
-export async function POST(request: NextRequest) {
+type Body = {
+  keystrokes: Keystroke[]
+  context?: {
+    lessonTitle?: string
+    lessonDescription?: string
+    analysisWindow?: string
+    totalKeystrokes?: number
+  }
+  aiConfig?: {
+    model?: string
+    maxTokens?: number
+    temperature?: number
+  }
+}
+
+export const dynamic = "force-dynamic"
+
+export async function POST(req: Request) {
   try {
-    console.log("[v0] Keystroke analysis API called")
-
-    const { keystrokes, metrics, currentCode, context, aiConfig } = await request.json()
-
-    console.log("[v0] Request data received:", {
-      keystrokesLength: keystrokes?.length,
-      metricsExists: !!metrics,
-      currentCodeLength: currentCode?.length,
-      contextExists: !!context,
-      aiConfigExists: !!aiConfig,
-    })
-
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.log("[v0] ANTHROPIC_API_KEY not found")
-      return NextResponse.json({ error: "ANTHROPIC_API_KEY is not configured" }, { status: 500 })
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Missing ANTHROPIC_API_KEY" },
+        { status: 500 }
+      )
     }
 
-    if (!metrics || !metrics.recentActivity || !metrics.sessionOverall || !metrics.patterns) {
-      console.log("[v0] Invalid metrics data:", metrics)
-      return NextResponse.json({ error: "Invalid metrics data" }, { status: 400 })
+    const body = (await req.json()) as Body
+    const strokes = Array.isArray(body?.keystrokes) ? body.keystrokes : []
+    if (strokes.length === 0) {
+      return NextResponse.json({ analysis: "" })
     }
 
-    // Create a detailed prompt for Claude to analyze the keystroke patterns
-    const prompt = `You are an expert technical interview coach analyzing a candidate's real-time coding behavior. Based on the keystroke data and metrics below, provide insightful, encouraging feedback that would help them improve their interview performance.
+    // summarize a few basic metrics to give Claude something structured
+    const typingKeys = strokes.filter((k) => k.key.length === 1)
+    const backspaces = strokes.filter((k) => k.key === "Backspace")
+    const specialKeys = strokes.filter((k) =>
+      ["Tab", "Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k.key)
+    )
 
-CURRENT CONTEXT:
-- Lesson: ${context.lessonTitle}
-- Session Duration: ${Math.round(context.sessionDuration / 1000)}s
-- Current Code Length: ${currentCode.length} characters
+    const timings = strokes
+      .map((k, i) => (i > 0 ? k.timestamp - strokes[i - 1].timestamp : 0))
+      .filter((t) => t > 0 && t < 10000)
+    const avgMs = timings.length ? Math.round(timings.reduce((a, b) => a + b, 0) / timings.length) : 0
+    const longPauses = timings.filter((t) => t > 3000).length
+    const rapidBursts = timings.filter((t) => t < 150).length
 
-RECENT ACTIVITY (Last 10 seconds):
-- Typing Speed: ${metrics.recentActivity.typingSpeed.toFixed(1)} chars/min
-- Error Rate: ${(metrics.recentActivity.errorRate * 100).toFixed(1)}%
-- Corrections: ${metrics.recentActivity.backspaceCount} backspaces, ${metrics.recentActivity.deleteCount} deletes
-- Navigation: ${metrics.recentActivity.arrowKeys} arrow keys, ${metrics.recentActivity.homeEndKeys} home/end
-- Code Elements: ${metrics.recentActivity.brackets} brackets, ${metrics.recentActivity.symbols} symbols
-- Long Pauses: ${metrics.recentActivity.longPauses} (>3s)
-- Total Keystrokes: ${metrics.recentActivity.keystrokeCount}
+    const seconds =
+      strokes.length > 1 ? (strokes[strokes.length - 1].timestamp - strokes[0].timestamp) / 1000 : 45
+    const wpm = Math.max(0, Math.round(typingKeys.length / 5 / (seconds / 60)))
+    const errorRate = typingKeys.length ? Math.min(1, backspaces.length / typingKeys.length) : 0
 
-SESSION OVERVIEW:
-- Average Speed: ${metrics.sessionOverall.averageTypingSpeed.toFixed(1)} chars/min
-- Total Keystrokes: ${metrics.sessionOverall.totalKeystrokes}
-- Total Corrections: ${metrics.sessionOverall.totalBackspaces}
-- Total Pauses: ${metrics.sessionOverall.totalPauses}
+    const lessonTitle = body?.context?.lessonTitle || "Programming Practice"
 
-BEHAVIOR PATTERNS:
-- Is Typing Code: ${metrics.patterns.isTypingCode}
-- Is Navigating: ${metrics.patterns.isNavigating}
-- Is Correcting: ${metrics.patterns.isCorrecting}
-- Is Pausing to Think: ${metrics.patterns.isPausing}
-- Is Actively Typing: ${metrics.patterns.isActivelyTyping}
+    const system = `You are a supportive *technical interview coach*.
+You receive keystroke telemetry and must return **one short markdown paragraph** of constructive, specific feedback.
+- Focus on process: rhythm, pauses, corrections, flow, and problem-solving approach.
+- Keep it beginner-friendly, positive, and actionable.
+- 2–5 sentences. Avoid generic platitudes.
+- If appropriate, offer one tiny next step (a hint), not a full solution.
+Return ONLY the paragraph (markdown allowed).`
 
-CURRENT CODE SNIPPET:
-\`\`\`
-${currentCode.slice(-200)} // Last 200 characters
-\`\`\`
+    const user = `Lesson: ${lessonTitle}
+Window: ${body?.context?.analysisWindow || "recent activity"}
+Keystroke summary:
+- total: ${strokes.length}
+- typing chars: ${typingKeys.length}
+- backspaces: ${backspaces.length}
+- special keys (tab/enter/arrows): ${specialKeys.length}
+- avg ms between keys: ${avgMs}
+- long pauses (>3000ms): ${longPauses}
+- rapid bursts (<150ms): ${rapidBursts}
+- estimated WPM: ${wpm}
+- error rate: ${Math.round(errorRate * 100)}%
 
-Provide specific, actionable feedback as a technical interview coach would. Focus on:
-1. What they're doing well
-2. Areas for improvement
-3. Interview-specific tips
-4. Encouragement and next steps
+Based on this, give precise feedback about pacing, confidence, and next step. Do not include JSON.`
 
-Keep the response concise (2-3 sentences) and supportive. Use a conversational tone as if speaking directly to the candidate during a practice session.`
+    const model = body?.aiConfig?.model || "claude-3-5-haiku-20241022"
+    const max_tokens = body?.aiConfig?.maxTokens ?? 400
+    const temperature = body?.aiConfig?.temperature ?? 0.3
 
-    console.log("[v0] Making request to Claude API")
-
-    const message = await anthropic.messages.create({
-      model: aiConfig.model || "claude-3-5-haiku-20241022",
-      max_tokens: aiConfig.maxTokens || 800,
-      temperature: aiConfig.temperature || 0.7,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    })
-
-    const feedback = message.content[0]?.type === "text" ? message.content[0].text : ""
-
-    console.log("[v0] Claude API response received, feedback length:", feedback.length)
-
-    return NextResponse.json({
-      feedback,
-      analysis: {
-        metrics,
-        patterns: metrics.patterns,
-        recommendations: {
-          focusArea: metrics.patterns.isCorrecting
-            ? "accuracy"
-            : metrics.patterns.isPausing
-              ? "confidence"
-              : "momentum",
-          strength:
-            metrics.recentActivity.typingSpeed > 60
-              ? "speed"
-              : metrics.patterns.isTypingCode
-                ? "structure"
-                : "thinking",
-        },
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
+      body: JSON.stringify({
+        model,
+        max_tokens,
+        system,
+        messages: [{ role: "user", content: user }],
+        temperature,
+      }),
+      cache: "no-store",
     })
-  } catch (error) {
-    console.error("[v0] Keystroke analysis error:", error)
 
-    if (error instanceof Error && error.message.includes("api_key")) {
-      return NextResponse.json({ error: "Invalid or missing ANTHROPIC_API_KEY" }, { status: 401 })
+    if (!resp.ok) {
+      const t = await resp.text()
+      // On failure, return empty analysis so client can fall back locally
+      return NextResponse.json({ analysis: "", error: `Claude HTTP ${resp.status}: ${t}` }, { status: 200 })
     }
 
-    return NextResponse.json({ error: "Failed to analyze keystrokes" }, { status: 500 })
+    const data = await resp.json()
+    const text =
+      Array.isArray(data?.content)
+        ? data.content.map((b: any) => b?.text ?? "").join("").trim()
+        : String(data?.content?.[0]?.text ?? "").trim()
+
+    // Keep it short on our end as a second guard
+    const clipped = text.length > 600 ? text.slice(0, 600) : text
+
+    return NextResponse.json({ analysis: clipped })
+  } catch (err: any) {
+    return NextResponse.json({ analysis: "", error: err?.message || "Unknown error" }, { status: 200 })
   }
 }

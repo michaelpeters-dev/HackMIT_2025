@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import type React from "react"
-import { setActiveTab } from "../utils/tabUtils" // Import setActiveTab
 
 import { Pin, MessageCircle, BookOpen } from "lucide-react"
 import { useLessonContext } from "./PracticeView"
@@ -62,7 +61,7 @@ export default function TeacherSidebar({
   onHintRequested,
 }: TeacherSidebarProps) {
   const { currentLessonId } = useLessonContext()
-const { submitSolution, submitting, result, error: submitError, clearResult } = useSubmission()
+  const { submitSolution, submitting, result, error: submitError, clearResult } = useSubmission()
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -82,8 +81,8 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
-  const [lastFeedbackType, setLastFeedbackType] = useState<number>(-1)
-  const [feedbackCount, setFeedbackCount] = useState(0)
+  const [lastFeedbackType, setLastFeedbackType] = useState<number>(-1) // kept for future use
+  const [feedbackCount, setFeedbackCount] = useState(0) // kept for future use
   const [lastFeedbackTime, setLastFeedbackTime] = useState<number>(0)
 
   const scrollToBottom = () => {
@@ -105,12 +104,45 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
     setMessages((prev) => [...prev, newMessage])
   }
 
+  // ---- Keystroke → API (Claude) analysis with local fallback ----
+  const analyzeKeystrokes = async (recentKeystrokes: KeystrokeData[]) => {
+    try {
+      const response = await fetch("/api/teacher/keystroke-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          keystrokes: recentKeystrokes,
+          context: {
+            lessonTitle: currentLesson?.title || "Programming Practice",
+            lessonDescription: currentLesson?.description || "Interactive programming assistance",
+            analysisWindow: "45 seconds",
+            totalKeystrokes: recentKeystrokes.length,
+          },
+          aiConfig: {
+            model: "claude-3-5-haiku-20241022",
+            maxTokens: 400,
+            temperature: 0.3,
+          },
+        }),
+      })
+
+      const data = await response.json()
+      if (data?.analysis && String(data.analysis).trim().length > 0) {
+        return String(data.analysis)
+      }
+      return generateAdvancedLocalAnalysis(recentKeystrokes)
+    } catch {
+      return generateAdvancedLocalAnalysis(recentKeystrokes)
+    }
+  }
+
   useEffect(() => {
     if (!keystrokes || keystrokes.length === 0) return
 
     const feedbackInterval = setInterval(() => {
       const now = Date.now()
-      const recentKeystrokes = keystrokes.filter((k) => now - k.timestamp <= 45000) // Last 45 seconds for more context
+      const recentKeystrokes = keystrokes.filter((k) => now - k.timestamp <= 45000) // Last 45 seconds
 
       if (recentKeystrokes.length > 20) {
         // Prevent analysis if we just gave feedback recently
@@ -120,14 +152,14 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
           return
         }
 
-        analyzeKeystrokesLocally(recentKeystrokes)
+        analyzeKeystrokes(recentKeystrokes)
           .then((analysis) => {
             if (analysis) {
               addMessage(analysis)
               setLastFeedbackTime(now) // Track when we last gave feedback
               // Auto-switch to teacher tab
               if (activeTab !== "teacher") {
-                onTabChange("teacher") // instead of setActiveTab("teacher")
+                onTabChange("teacher")
               }
             }
           })
@@ -135,65 +167,13 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
             console.error("Error during keystroke analysis:", error)
           })
       }
-    }, 25000) // Every 25 seconds instead of 8 for much less frequent feedback
+    }, 25000) // Every 25 seconds
 
     return () => clearInterval(feedbackInterval)
-  }, [keystrokes, activeTab]) // Removed lastFeedbackType and feedbackCount from dependencies to prevent re-renders
+  }, [keystrokes, activeTab, lastFeedbackTime, onTabChange])
 
-  const analyzeKeystrokesLocally = async (recentKeystrokes: KeystrokeData[]) => {
-    try {
-      console.log("[v0] Analyzing keystrokes with Claude API...")
-      console.log("[v0] Keystroke data being sent:", {
-        keystrokeCount: recentKeystrokes.length,
-        timeSpan:
-          recentKeystrokes.length > 1
-            ? recentKeystrokes[recentKeystrokes.length - 1].timestamp - recentKeystrokes[0].timestamp
-            : 0,
-        lesson: currentLesson?.title,
-      })
-
-      const response = await fetch("/api/teacher/keystroke-analysis", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          keystrokes: recentKeystrokes,
-          context: {
-            lessonTitle: currentLesson?.title || "Programming Practice",
-            lessonDescription: currentLesson?.description || "Interactive programming assistance",
-            analysisWindow: "30 seconds",
-            totalKeystrokes: recentKeystrokes.length,
-          },
-          aiConfig: {
-            model: "claude-3-5-haiku-20241022",
-            maxTokens: 800,
-            temperature: 0.3,
-          },
-        }),
-      })
-
-      console.log("[v0] API response status:", response.status)
-      console.log("[v0] API response ok:", response.ok)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("[v0] Claude API success:", data)
-        return data.analysis
-      } else {
-        const errorData = await response.json()
-        console.log("[v0] Claude API error response:", errorData)
-        throw new Error(`API failed with status ${response.status}`)
-      }
-    } catch (error) {
-      console.log("[v0] Claude API failed, using local analysis fallback")
-      return generateAdvancedLocalAnalysis(recentKeystrokes)
-    }
-  }
-
+  // Local fallback analysis when Claude/API is not available
   const generateAdvancedLocalAnalysis = (keystrokes: KeystrokeData[]): string => {
-    console.log("[v0] Using advanced local keystroke analysis...")
-
     const typingKeys = keystrokes.filter((k) => k.key.length === 1)
     const backspaces = keystrokes.filter((k) => k.key === "Backspace")
     const specialKeys = keystrokes.filter((k) =>
@@ -205,17 +185,15 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
       .filter((t) => t > 0 && t < 10000) // Filter out extremely long pauses
 
     const avgTimeBetweenKeys = timings.length > 0 ? timings.reduce((a, b) => a + b, 0) / timings.length : 0
-    const longPauses = timings.filter((t) => t > 3000).length // Increased threshold for "long" pauses
-    const rapidBursts = timings.filter((t) => t < 150).length // Slightly increased for more realistic "rapid" detection
+    const longPauses = timings.filter((t) => t > 3000).length
+    const rapidBursts = timings.filter((t) => t < 150).length
 
-    // Calculate WPM with better accuracy
     const timeSpanSeconds =
       keystrokes.length > 1 ? (keystrokes[keystrokes.length - 1].timestamp - keystrokes[0].timestamp) / 1000 : 45
     const wpm = Math.round(typingKeys.length / 5 / (timeSpanSeconds / 60))
 
     const errorRate = typingKeys.length > 0 ? backspaces.length / typingKeys.length : 0
-    const correctionEfficiency =
-      backspaces.length > 0 ? typingKeys.length / backspaces.length : Number.POSITIVE_INFINITY
+    const correctionEfficiency = backspaces.length > 0 ? typingKeys.length / backspaces.length : Number.POSITIVE_INFINITY
 
     const keyFrequency: { [key: string]: number } = {}
     typingKeys.forEach((k) => {
@@ -228,60 +206,46 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
       .map(([key, count]) => `${key}(${count})`)
 
     const hasConsistentRhythm = timings.length > 10 && Math.abs(Math.max(...timings) - Math.min(...timings)) < 800
-    const showsHesitation = longPauses > keystrokes.length * 0.15 // Increased threshold
+    const showsHesitation = longPauses > keystrokes.length * 0.15
     const isTypingFast = avgTimeBetweenKeys < 180 && wpm > 30
-    const isTypingCarefully = errorRate < 0.08 && avgTimeBetweenKeys > 250
     const showsGoodFlow = rapidBursts > keystrokes.length * 0.2 && longPauses < keystrokes.length * 0.1
 
     const feedbackOptions = [
-      // Performance-focused insights
       () => {
         if (wpm > 40) {
-          return `**Performance Analysis:** Exceptional ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate! You're in the top 10% of developers for typing speed. Your ${longPauses} strategic pauses show excellent problem-solving discipline. **Interview Tip:** This speed advantage lets you focus more on algorithm optimization and edge cases.`
+          return `**Performance Analysis:** Exceptional ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate! You're moving quickly while keeping mistakes under control. Your ${longPauses} longer thinking pauses show strategic planning. **Next step:** narrate your intent before each short burst to make your reasoning legible.`
         } else if (wpm > 25) {
-          return `**Performance Analysis:** Strong ${wpm} WPM coding pace. Your ${backspaces.length} corrections across ${typingKeys.length} characters show good self-monitoring (${Math.round(correctionEfficiency)}:1 efficiency). **Interview Tip:** This balanced approach of speed and accuracy is ideal for technical interviews.`
+          return `**Performance Analysis:** Solid ${wpm} WPM and steady progress. ${backspaces.length} corrections across ${typingKeys.length} chars (${Math.round(
+            correctionEfficiency,
+          )}:1) shows healthy self-monitoring. **Next step:** commit a tiny slice (one function or case) and test it aloud.`
         } else {
-          return `**Performance Analysis:** Methodical ${wpm} WPM approach with ${Math.round(errorRate * 100)}% error rate. Your ${longPauses} thinking pauses demonstrate careful problem-solving. **Interview Tip:** Quality over speed! Use this deliberate pace to explain your reasoning clearly to interviewers.`
+          return `**Performance Analysis:** Deliberate pace at ${wpm} WPM with ${Math.round(errorRate * 100)}% error rate. Your ${longPauses} planning pauses suggest careful reasoning. **Next step:** code in 60–90s micro-iterations—implement one line, then validate it with a quick mental trace.`
         }
       },
-
-      // Flow and rhythm insights
       () => {
         if (showsGoodFlow) {
-          return `**Coding Flow Analysis:** Excellent rhythm detected! ${rapidBursts} quick coding bursts balanced with ${longPauses} strategic pauses. Your ${wpm} WPM maintains good momentum without sacrificing accuracy (${Math.round(errorRate * 100)}% error rate). **Interview Tip:** This natural flow shows confidence - perfect for live coding sessions.`
+          return `**Flow:** Nice rhythm—${rapidBursts} quick bursts balanced by brief checks. That cadence usually reflects clarity. **Tip:** keep announcing the next micro-goal (“parse input”, “handle empty case”) before each burst.`
         } else if (hasConsistentRhythm) {
-          return `**Coding Flow Analysis:** Impressive consistency! Your ${avgTimeBetweenKeys.toFixed(0)}ms average keystroke timing shows steady focus. This disciplined pace at ${wpm} WPM demonstrates good concentration. **Interview Tip:** Consistent rhythm like this helps interviewers follow your thought process.`
+          return `**Flow:** Consistent timing (~${avgTimeBetweenKeys.toFixed(0)}ms between keys) indicates focus. **Tip:** punctuate with tiny test runs or mental walkthroughs to lock gains and surface edge cases early.`
         } else {
-          return `**Coding Flow Analysis:** Dynamic coding style with varied pacing. ${longPauses} longer pauses suggest deep thinking, while your overall ${wpm} WPM keeps good progress. **Interview Tip:** Verbalize during pace changes: "Let me think through this logic" or "Now I'll implement the solution."`
+          return `**Flow:** Pace varies—${longPauses} longer pauses mixed with sprints. That's fine during design. **Tip:** when you pause, verbalize the decision you’re weighing (e.g., data shape, loop boundary) to keep interviewers aligned.`
         }
       },
-
-      // Technical proficiency insights
       () => {
         if (specialKeys.length > keystrokes.length * 0.12) {
-          return `**Technical Proficiency:** Excellent keyboard navigation! ${specialKeys.length} special keys (arrows, tabs) in ${keystrokes.length} total keystrokes shows strong editor proficiency. Combined with ${wpm} WPM, this efficiency is impressive. **Interview Tip:** This technical fluency demonstrates professional experience - a subtle but positive signal to interviewers.`
+          return `**Editor proficiency:** Frequent special keys (${specialKeys.length}) suggest efficient navigation. **Tip:** keep leveraging quick cursor moves when refactoring small blocks—it's a subtle signal of fluency.`
         } else if (errorRate < 0.05) {
-          return `**Technical Proficiency:** Outstanding accuracy! Only ${Math.round(errorRate * 100)}% error rate with ${wpm} WPM typing. Your precision suggests strong attention to detail and coding experience. **Interview Tip:** This accuracy is excellent, but don't hesitate to make strategic mistakes to show your debugging process.`
+          return `**Accuracy:** Very low correction rate (~${Math.round(errorRate * 100)}%). **Tip:** don't be afraid to prototype imperfectly first—showing how you debug can be as impressive as pristine typing.`
         } else {
-          return `**Technical Proficiency:** Balanced coding approach with ${Math.round(errorRate * 100)}% error rate and ${backspaces.length} corrections. Your key usage pattern (${mostUsedKeys.join(", ")}) shows structured programming habits. **Interview Tip:** This practical balance of speed and accuracy reflects real-world coding skills.`
-        }
-      },
-
-      // Problem-solving pattern insights
-      () => {
-        if (showsHesitation) {
-          return `**Problem-Solving Pattern:** ${longPauses} extended thinking periods in your coding session show thorough analysis - excellent for complex problems! Your ${wpm} WPM between pauses maintains good implementation speed. **Interview Tip:** These thinking moments are valuable - narrate them: "I'm considering the time complexity" or "Let me think about edge cases."`
-        } else if (isTypingFast) {
-          return `**Problem-Solving Pattern:** Confident implementation style! ${wpm} WPM with ${rapidBursts} quick sequences suggests you have a clear mental model. Your ${Math.round(errorRate * 100)}% error rate shows controlled speed. **Interview Tip:** This confidence is great, but remember to explain your approach as you code quickly.`
-        } else {
-          return `**Problem-Solving Pattern:** Methodical problem-solving approach with ${avgTimeBetweenKeys.toFixed(0)}ms average keystroke timing. Your ${Math.round(errorRate * 100)}% error rate and ${longPauses} strategic pauses show careful consideration. **Interview Tip:** This thoughtful approach is perfect for demonstrating your problem-solving process step by step.`
+          return `**Editing:** Balanced speed with corrections (~${Math.round(errorRate * 100)}%); common keys: ${mostUsedKeys.join(
+            ", ",
+          )}. **Tip:** if you notice repeated typo patterns, slow for 10–15s to stabilize, then resume bursts.`
         }
       },
     ]
 
-    const currentTime = Date.now()
-    const feedbackIndex = Math.floor((currentTime / 60000) % feedbackOptions.length) // Rotate every minute
-    return feedbackOptions[feedbackIndex]()
+    const idx = Math.floor((Date.now() / 60000) % feedbackOptions.length)
+    return feedbackOptions[idx]()
   }
 
   const handleSendMessage = async () => {
@@ -355,21 +319,13 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
   }
 
   const generateLecture = async () => {
-    console.log("[v0] Generate lecture clicked, currentLesson:", currentLesson)
-    if (!currentLesson) {
-      console.log("[v0] No current lesson, returning early")
-      return
-    }
+    if (!currentLesson) return
 
-    console.log("[v0] Starting lecture generation for lesson:", currentLessonId)
     setIsLoadingLecture(true)
     try {
-      console.log("[v0] Making API request to /api/teacher/lecture")
       const response = await fetch("/api/teacher/lecture", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lessonId: currentLessonId,
           lessonTitle: currentLesson.title,
@@ -378,15 +334,11 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
         }),
       })
 
-      console.log("[v0] API response status:", response.status)
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Lecture content received:", data)
         setLectureContent(data.lectureContent)
       } else {
         const errorData = await response.json()
-        console.log("[v0] API error response:", errorData)
-
         if (response.status === 503) {
           addMessage(
             "🔄 **Service Temporarily Unavailable**: The Claude API is experiencing connectivity issues. This is usually temporary - please try again in a few moments.",
@@ -400,52 +352,30 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
             "teacher",
           )
         } else {
-          addMessage(
-            `❌ **Error**: ${errorData.error || "Failed to generate lecture content"}. Please try again.`,
-            "teacher",
-            "teacher",
-          )
+          addMessage(`❌ **Error**: ${errorData.error || "Failed to generate lecture content"}. Please try again.`, "teacher", "teacher")
         }
         setLectureContent(null)
       }
     } catch (error) {
-      console.log("[v0] Fetch error:", error)
-      if (error instanceof Error && (error.message.includes("fetch") || error.message.includes("network"))) {
-        addMessage(
-          "🌐 **Network Error**: Unable to connect to the lecture generation service. Please check your internet connection and try again in a few moments.",
-          "teacher",
-          "teacher",
-        )
-      } else {
-        addMessage(
-          "🔌 **Connection Error**: Unable to connect to the lecture generation service. Please check your internet connection and try again.",
-          "teacher",
-          "teacher",
-        )
-      }
+      addMessage(
+        "🔌 **Connection Error**: Unable to connect to the lecture generation service. Please check your internet connection and try again.",
+        "teacher",
+        "teacher",
+      )
       setLectureContent(null)
     } finally {
       setIsLoadingLecture(false)
-      console.log("[v0] Lecture generation completed")
     }
   }
 
   const generateQuestion = async () => {
-    console.log("[v0] Generate question clicked, currentLesson:", currentLesson)
-    if (!currentLesson) {
-      console.log("[v0] No current lesson, returning early")
-      return
-    }
+    if (!currentLesson) return
 
-    console.log("[v0] Starting question generation for lesson:", currentLessonId)
     setIsLoadingQuestion(true)
     try {
-      console.log("[v0] Making API request to /api/questions/generate")
       const response = await fetch("/api/questions/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: currentLesson.title,
           difficulty: currentLesson.difficulty,
@@ -454,10 +384,8 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
         }),
       })
 
-      console.log("[v0] API response status:", response.status)
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Question content received:", data)
         if (data.questions && data.questions.length > 0) {
           const question = data.questions[0]
           setGeneratedQuestion({
@@ -468,13 +396,10 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
             followUpQuestions: question.followUpQuestions || [],
           })
         } else {
-          console.log("[v0] No questions in response")
           setGeneratedQuestion(null)
         }
       } else {
         const errorData = await response.json()
-        console.log("[v0] API error response:", errorData)
-
         if (errorData.error?.includes("api_key") || errorData.error?.includes("ANTHROPIC_API_KEY")) {
           addMessage(
             "⚠️ **Configuration Required**: I need a Claude API key to generate questions. Please add your ANTHROPIC_API_KEY to the environment variables in your Vercel project settings.",
@@ -482,16 +407,11 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
             "teacher",
           )
         } else {
-          addMessage(
-            `❌ **Error**: ${errorData.error || "Failed to generate question content"}. Please try again.`,
-            "teacher",
-            "teacher",
-          )
+          addMessage(`❌ **Error**: ${errorData.error || "Failed to generate question content"}. Please try again.`, "teacher", "teacher")
         }
         setGeneratedQuestion(null)
       }
     } catch (error) {
-      console.log("[v0] Fetch error:", error)
       addMessage(
         "🔌 **Connection Error**: Unable to connect to the question generation service. Please check your internet connection and try again.",
         "teacher",
@@ -500,7 +420,6 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
       setGeneratedQuestion(null)
     } finally {
       setIsLoadingQuestion(false)
-      console.log("[v0] Question generation completed")
     }
   }
 
@@ -511,7 +430,7 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
     if (activeTab === "question" && !generatedQuestion && !isLoadingQuestion) {
       generateQuestion()
     }
-  }, [activeTab, currentLessonId])
+  }, [activeTab, currentLessonId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLectureContent(null)
@@ -524,24 +443,16 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
     try {
       const currentCode = (window as any).getCurrentCode?.() || ""
 
-      console.log("[v0] Submitting solution:", {
-        lessonId: currentLessonId,
-        codeLength: currentCode.length,
-        hasAudio: !!recordedAudio,
-        hasTranscription: !!transcription,
-        transcriptionLength: transcription?.length || 0,
-      })
-
       await submitSolution({
-  lessonId: currentLessonId,
-  lessonTitle: currentLesson.title,
-  lessonDifficulty: currentLesson.difficulty,
-  lessonCategory: currentLesson.category,
-  code: currentCode,
-  audioRecording: recordedAudio || undefined,
-  transcription: transcription || undefined,
-  keystrokes: keystrokes || undefined,
-})
+        lessonId: currentLessonId,
+        lessonTitle: currentLesson.title,
+        lessonDifficulty: currentLesson.difficulty,
+        lessonCategory: currentLesson.category,
+        code: currentCode,
+        audioRecording: recordedAudio || undefined,
+        transcription: transcription || undefined,
+        keystrokes: keystrokes || undefined,
+      })
     } catch (error) {
       console.error("Submission failed:", error)
       addMessage("Failed to submit solution. Please try again.", "teacher", "teacher")
@@ -550,7 +461,6 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
 
   useEffect(() => {
     if (result) {
-      console.log("[v0] Result received, showing summary modal:", result)
       setShowSummaryModal(true)
     }
   }, [result])
@@ -558,11 +468,7 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
   useEffect(() => {
     if (shouldRequestHint && activeTab === "teacher" && onHintRequested) {
       const currentCode = (window as any).getCurrentCode?.() || ""
-
-      console.log("[v0] Getting hint for current code:", currentCode)
-
       const hintMessage = `I need a hint for the current problem. Here's my current code:\n\n\`\`\`python\n${currentCode}\n\`\`\`\n\nCan you give me a small hint to help me move forward without giving away the complete solution?`
-
       addMessage(hintMessage, "user", "user")
       handleHintRequest(hintMessage)
       onHintRequested()
@@ -575,11 +481,9 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
     try {
       const response = await fetch("/api/teacher/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: message,
+          message,
           context: {
             userId: "user-123",
             sessionId: "session-" + Date.now(),
@@ -618,11 +522,7 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
       } else if (error instanceof Error && error.message.includes("rate_limit")) {
         addMessage("⏱️ **Rate Limited**: Too many requests. Please wait a moment and try again.", "teacher", "teacher")
       } else {
-        addMessage(
-          "🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.",
-          "teacher",
-          "teacher",
-        )
+        addMessage("🔌 **Connection Error**: I'm having trouble connecting right now. Please try again later.", "teacher", "teacher")
       }
     }
   }
@@ -756,8 +656,7 @@ const { submitSolution, submitting, result, error: submitError, clearResult } = 
                       <h4 className="text-sm font-semibold text-green-800 mb-2">Interview Strategy:</h4>
                       <div className="text-sm text-green-700 leading-relaxed">
                         <p className="font-medium mb-2">
-                          Your digital coding teacher will analyze your keystrokes in the IDE and give you advice and
-                          tips!
+                          Your digital coding teacher will analyze your keystrokes in the IDE and give you advice and tips!
                         </p>
                         <ul className="space-y-1">
                           <li>• Clarify requirements - Ask questions about input/output format and constraints</li>
