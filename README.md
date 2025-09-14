@@ -86,14 +86,23 @@ Make sure you have the following installed:
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/michaelpeters-dev/HackMIT_2025.git](https://github.com/michaelpeters-dev/HackMIT_2025.git) # Replace with your actual repo URL
+    git clone https://github.com/michaelpeters-dev/HackMIT_2025.git
     cd HackMIT_2025
     ```
 2.  **Install dependencies:**
+
     ```bash
     npm install
     # or
     yarn install
+    ```
+
+3.  **Set up environment variables:**
+
+    Create a `.env` file in the project root and add your keys
+
+    ```bash
+    ANTHROPIC_API_KEY=your_claude_api_key_here
     ```
 
 ### Running the Development Server
