@@ -249,7 +249,7 @@ export default function PracticeView() {
               />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">
-              Code<span className="text-green-600">Mind</span>
+              Yu<span className="text-green-600">Code</span>
             </h1>
           </div>
         </div>
