@@ -38,7 +38,7 @@ export default function PracticeView() {
   const [teacherActiveTab, setTeacherActiveTab] = useState<"lecture" | "question" | "teacher">("lecture")
   const [shouldRequestHint, setShouldRequestHint] = useState(false)
 
-  const { lessons, loading, error } = useLessons()
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useLessons()
   const { keystrokes, startTracking, stopTracking, isTracking } = useKeystrokes()
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function PracticeView() {
     return () => stopTracking()
   }, [startTracking, stopTracking])
 
-  if (loading) {
+  if (lessonsLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -57,11 +57,11 @@ export default function PracticeView() {
     )
   }
 
-  if (error) {
+  if (lessonsError) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Error loading lessons: {error}</p>
+          <p className="text-red-600 mb-4">Error loading lessons: {lessonsError}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
@@ -73,7 +73,7 @@ export default function PracticeView() {
     )
   }
 
-  const currentLesson = lessons.find((lesson) => lesson.id === currentLessonId) || lessons[0]
+  const currentLesson = lessons.find((lesson: { id: number }) => lesson.id === currentLessonId) || lessons[0]
   const canGoPrevious = currentLessonId > 1
   const canGoNext = currentLessonId < lessons.length
 

@@ -34,7 +34,7 @@ export default function TaskSidebar() {
             className={`px-3 py-1 text-primary-foreground text-sm font-medium rounded ${
               currentLesson.difficulty === "Beginner"
                 ? "bg-green-600"
-                : currentLesson.difficulty === "Intermediate"
+                : currentLesson.difficulty === "Medium"
                   ? "bg-yellow-600"
                   : "bg-red-600"
             }`}
@@ -70,7 +70,7 @@ export default function TaskSidebar() {
                       className={`px-2 py-1 text-xs font-medium rounded ${
                         lesson.difficulty === "Beginner"
                           ? "bg-green-100 text-green-800"
-                          : lesson.difficulty === "Intermediate"
+                          : lesson.difficulty === "Medium"
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-red-100 text-red-800"
                       }`}

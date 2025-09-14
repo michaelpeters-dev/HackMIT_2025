@@ -62,7 +62,7 @@ export default function TeacherSidebar({
   onHintRequested,
 }: TeacherSidebarProps) {
   const { currentLessonId } = useLessonContext()
-  const { submitSolution, submitting, result, error, clearResult } = useSubmission()
+const { submitSolution, submitting, result, error: submitError, clearResult } = useSubmission()
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -127,7 +127,7 @@ export default function TeacherSidebar({
               setLastFeedbackTime(now) // Track when we last gave feedback
               // Auto-switch to teacher tab
               if (activeTab !== "teacher") {
-                setActiveTab("teacher")
+                onTabChange("teacher") // instead of setActiveTab("teacher")
               }
             }
           })
@@ -533,12 +533,15 @@ export default function TeacherSidebar({
       })
 
       await submitSolution({
-        lessonId: currentLessonId,
-        code: currentCode,
-        audioRecording: recordedAudio || undefined,
-        transcription: transcription || undefined, // Pass transcription to API
-        keystrokes: keystrokes || undefined,
-      })
+  lessonId: currentLessonId,
+  lessonTitle: currentLesson.title,
+  lessonDifficulty: currentLesson.difficulty,
+  lessonCategory: currentLesson.category,
+  code: currentCode,
+  audioRecording: recordedAudio || undefined,
+  transcription: transcription || undefined,
+  keystrokes: keystrokes || undefined,
+})
     } catch (error) {
       console.error("Submission failed:", error)
       addMessage("Failed to submit solution. Please try again.", "teacher", "teacher")
@@ -1015,8 +1018,8 @@ export default function TeacherSidebar({
               )}
             </button>
 
-            {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</div>
+            {submitError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{submitError}</div>
             )}
           </div>
         </div>
