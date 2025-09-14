@@ -1,6 +1,6 @@
-# CodeMind
+# CodeMind <img width="1088" height="960" alt="image" src="https://github.com/user-attachments/assets/46e7eade-cacf-4601-94c1-02145e7809db" />
 
-<img width="43" height="42" alt="image" src="https://github.com/user-attachments/assets/be845e7d-10b0-4f46-aa84-ca4a86cb58fa" />
+
 
 
 ## Table of Contents
