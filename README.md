@@ -1,6 +1,8 @@
 # CodeMind
 
-![CodeMind Logo](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) ## Table of Contents
+[CodeMind Logo](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) 
+
+## Table of Contents
 
 - [Project Description](#project-description)
 - [Live Demo](#live-demo)
