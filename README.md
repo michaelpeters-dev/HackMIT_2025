@@ -3,8 +3,6 @@
 <img width="43" height="42" alt="image" src="https://github.com/user-attachments/assets/be845e7d-10b0-4f46-aa84-ca4a86cb58fa" />
 
 
-](https://raw.githubusercontent.com/your-repo/your-project/main/public/images/codemind-logo.png) 
-
 ## Table of Contents
 
 - [Project Description](#project-description)
